@@ -3,7 +3,7 @@
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Next.js](https://img.shields.io/badge/Next.js-15+-000000?logo=next.js&logoColor=white)](https://nextjs.org)
+[![Next.js](https://img.shields.io/badge/Next.js-16+-000000?logo=next.js&logoColor=white)](https://nextjs.org)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Railway](https://img.shields.io/badge/Deploy-Railway-0B0D0E?logo=railway)](https://railway.app)
 
@@ -16,7 +16,7 @@ ML-powered League of Legends match analysis using Random Forest to identify skil
 | Layer | Tech |
 |-------|------|
 | Backend | FastAPI, SQLAlchemy, Scikit-learn |
-| Frontend | Next.js 15, Tailwind CSS 4, Recharts |
+| Frontend | Next.js 16.1.1, Tailwind CSS 4, Recharts |
 | Database | SQLite (dev) / PostgreSQL (prod) |
 
 ## Features
