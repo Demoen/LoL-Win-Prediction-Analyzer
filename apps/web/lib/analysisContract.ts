@@ -9,6 +9,44 @@ export type AnalysisUser = {
     puuid: string;
 };
 
+export type HeatmapPosition = {
+    x: number;
+    y: number;
+    timestamp: number;
+    totalGold: number;
+    goldDelta: number;
+};
+
+export type HeatmapParticipant = {
+    participantId: number;
+    championName: string;
+    teamId: number;
+    positions: HeatmapPosition[];
+};
+
+export type HeatmapKillEvent = {
+    x: number;
+    y: number;
+    killerId: number;
+    victimId: number;
+    assistingParticipantIds: number[];
+    timestamp: number;
+};
+
+export type HeatmapWardEvent = {
+    x: number;
+    y: number;
+    wardType: string;
+    creatorId: number;
+    timestamp: number;
+};
+
+export type HeatmapData = {
+    participants: HeatmapParticipant[];
+    kill_events: HeatmapKillEvent[];
+    ward_events: HeatmapWardEvent[];
+};
+
 export type AnalysisResult = {
     status: string;
     user: AnalysisUser;
@@ -27,6 +65,7 @@ export type AnalysisResult = {
     territory_metrics: unknown;
     ranked_data: unknown;
     ddragon_version: string;
+    heatmap_data: HeatmapData | null;
 };
 
 const toNum = (v: unknown, fallback: number) => {
@@ -63,5 +102,6 @@ export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
         territory_metrics: data.territory_metrics ?? {},
         ranked_data: data.ranked_data ?? null,
         ddragon_version: typeof data.ddragon_version === 'string' ? data.ddragon_version : '14.24.1',
+        heatmap_data: (data.heatmap_data && typeof data.heatmap_data === 'object') ? (data.heatmap_data as HeatmapData) : null,
     };
 }

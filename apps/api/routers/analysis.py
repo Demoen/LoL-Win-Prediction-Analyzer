@@ -8,7 +8,7 @@ from services.ingestion import IngestionService
 from services.riot import riot_service
 from ml.pipeline import load_player_data
 from ml.training import model_instance
-from ml.timeline_analysis import analyze_match_territory, aggregate_territory_metrics, analyze_match_timeline_series
+from ml.timeline_analysis import analyze_match_territory, aggregate_territory_metrics, analyze_match_timeline_series, extract_heatmap_data
 from models import Match, Participant
 from pydantic import BaseModel
 from typing import Optional
@@ -306,13 +306,14 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
 
             yield json.dumps({"type": "progress", "message": "Fetching match timeline...", "percent": 95}) + "\n"
 
-            # 11. Timeline Series (Gold/XP Difference)
+            # 11. Timeline Series (Gold/XP Difference) + Heatmap Data
             match_timeline_series = {}
+            heatmap_data = {}
             if last_match_obj:
                  try:
                      regional_routing = REGION_TO_ROUTING.get(request.region.lower(), "europe")
                      timeline = await riot_service.get_match_timeline(regional_routing, last_match_obj.match_id)
-                     
+
                      # Find participant ID from match object
                      p_id = 0
                      if last_match_obj.data:
@@ -320,9 +321,13 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
                              if p.get('puuid') == user.puuid:
                                  p_id = p.get('participantId')
                                  break
-                     
+
                      if p_id > 0:
                          match_timeline_series = analyze_match_timeline_series(timeline, p_id, enemy_p_id)
+
+                     # Extract heatmap data for all participants
+                     if timeline and last_match_obj.data:
+                         heatmap_data = extract_heatmap_data(timeline, last_match_obj.data)
 
                  except Exception as e:
                     print(f"Error fetching timeline series: {e}")
@@ -357,7 +362,8 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
                 "total_matches": len(df),
                 "territory_metrics": territory_metrics,
                 "ranked_data": ranked_data,
-                "ddragon_version": DDRAGON_VERSION
+                "ddragon_version": DDRAGON_VERSION,
+                "heatmap_data": heatmap_data
             }
             
             # Use a custom JSON encoder for SQLAlchemy objects if needed, or rely on Pydantic/FastAPI

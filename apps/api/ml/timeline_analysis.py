@@ -292,3 +292,122 @@ def analyze_match_timeline_series(
     except Exception as e:
         print(f"Error in analyze_match_timeline_series: {e}")
         return {}
+
+
+def extract_heatmap_data(
+    timeline_data: Any,
+    match_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Extract spatial data from timeline for heatmap visualization.
+    Returns positions for all 10 participants, kill events, and ward events with coordinates.
+    """
+    if not timeline_data or not match_data:
+        return {}
+
+    try:
+        info = _get_attr_or_key(timeline_data, 'info', {})
+        frames = _get_attr_or_key(info, 'frames', [])
+        if not frames:
+            return {}
+
+        # Build participant lookup from match data
+        match_info = match_data.get('info', {}) if isinstance(match_data, dict) else {}
+        match_participants = match_info.get('participants', [])
+        participant_lookup = {}
+        for p in match_participants:
+            pid = p.get('participantId')
+            if pid:
+                participant_lookup[pid] = {
+                    'championName': p.get('championName', 'Unknown'),
+                    'teamId': p.get('teamId', 0),
+                }
+
+        # Initialize per-participant position tracking
+        participant_positions: Dict[int, List[Dict[str, Any]]] = {pid: [] for pid in range(1, 11)}
+        prev_gold: Dict[int, int] = {}
+        kill_events = []
+        ward_events = []
+
+        for frame in frames:
+            timestamp = _get_attr_or_key(frame, 'timestamp', 0)
+            participant_frames = _get_attr_or_key(frame, 'participantFrames', {})
+
+            # Extract positions and gold for each participant
+            if participant_frames:
+                for pid in range(1, 11):
+                    p_data = _get_attr_or_key(participant_frames, str(pid))
+                    if not p_data:
+                        continue
+                    position = _get_attr_or_key(p_data, 'position', {})
+                    if not position:
+                        continue
+                    x = _get_attr_or_key(position, 'x', 0)
+                    y = _get_attr_or_key(position, 'y', 0)
+                    if x == 0 and y == 0:
+                        continue
+                    total_gold = _get_attr_or_key(p_data, 'totalGold', 0)
+                    gold_delta = total_gold - prev_gold.get(pid, total_gold)
+                    prev_gold[pid] = total_gold
+                    participant_positions[pid].append({
+                        'x': x, 'y': y,
+                        'timestamp': timestamp,
+                        'totalGold': total_gold,
+                        'goldDelta': max(0, gold_delta),
+                    })
+
+            # Extract events
+            events = _get_attr_or_key(frame, 'events', [])
+            if events:
+                for event in events:
+                    event_type = _get_attr_or_key(event, 'type', '')
+
+                    if event_type == 'CHAMPION_KILL':
+                        pos = _get_attr_or_key(event, 'position', {})
+                        ex = _get_attr_or_key(pos, 'x', 0)
+                        ey = _get_attr_or_key(pos, 'y', 0)
+                        if ex == 0 and ey == 0:
+                            continue
+                        kill_events.append({
+                            'x': ex, 'y': ey,
+                            'killerId': _get_attr_or_key(event, 'killerId', 0),
+                            'victimId': _get_attr_or_key(event, 'victimId', 0),
+                            'assistingParticipantIds': _get_attr_or_key(event, 'assistingParticipantIds', []),
+                            'timestamp': _get_attr_or_key(event, 'timestamp', timestamp),
+                        })
+
+                    elif event_type == 'WARD_PLACED':
+                        pos = _get_attr_or_key(event, 'position', {})
+                        if not pos:
+                            continue
+                        wx = _get_attr_or_key(pos, 'x', 0)
+                        wy = _get_attr_or_key(pos, 'y', 0)
+                        if wx == 0 and wy == 0:
+                            continue
+                        ward_events.append({
+                            'x': wx, 'y': wy,
+                            'wardType': _get_attr_or_key(event, 'wardType', 'UNDEFINED'),
+                            'creatorId': _get_attr_or_key(event, 'creatorId', 0),
+                            'timestamp': _get_attr_or_key(event, 'timestamp', timestamp),
+                        })
+
+        # Build final participants array
+        participants = []
+        for pid in range(1, 11):
+            lookup = participant_lookup.get(pid, {})
+            participants.append({
+                'participantId': pid,
+                'championName': lookup.get('championName', 'Unknown'),
+                'teamId': lookup.get('teamId', 0),
+                'positions': participant_positions.get(pid, []),
+            })
+
+        return {
+            'participants': participants,
+            'kill_events': kill_events,
+            'ward_events': ward_events,
+        }
+
+    except Exception as e:
+        print(f"Error in extract_heatmap_data: {e}")
+        return {}

@@ -122,6 +122,7 @@ function StatRow({ label, value, highlight = false, valueColor }: { label: strin
 
 import { DetailedMatchAnalysis } from "@/components/DetailedMatchAnalysis";
 import { PlayerPerformanceTrends } from "@/components/PlayerPerformanceTrends";
+import { HeatmapVisualization } from "@/components/HeatmapVisualization";
 
 export default function Dashboard() {
     const params = useParams();
@@ -133,7 +134,7 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [progress, setProgress] = useState({ message: "Initializing...", percent: 0 });
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<"overview" | "match" | "trends">("overview");
+    const [activeTab, setActiveTab] = useState<"overview" | "match" | "trends" | "heatmap">("overview");
 
     useEffect(() => {
         async function fetchData() {
@@ -231,7 +232,8 @@ export default function Dashboard() {
         skill_focus = [],
         match_timeline_series = {},
         performance_trends = [],
-        enemy_stats: enemyStats = {}
+        enemy_stats: enemyStats = {},
+        heatmap_data = null
     } = data;
 
     const { top_differentiators = [], category_importance = [] } = metrics || {};
@@ -263,6 +265,9 @@ export default function Dashboard() {
                     </button>
                     <button onClick={() => setActiveTab("trends")} className={cn("p-3 rounded-xl transition-all", activeTab === "trends" ? "text-[#00D1FF] bg-white/5 shadow-[0_0_10px_rgba(0,209,255,0.2)]" : "text-zinc-500 hover:text-white hover:bg-white/5")}>
                         <ChartLine className="w-6 h-6" />
+                    </button>
+                    <button onClick={() => setActiveTab("heatmap")} className={cn("p-3 rounded-xl transition-all", activeTab === "heatmap" ? "text-[#00D1FF] bg-white/5 shadow-[0_0_10px_rgba(0,209,255,0.2)]" : "text-zinc-500 hover:text-white hover:bg-white/5")}>
+                        <Map className="w-6 h-6" />
                     </button>
                 </nav>
                 <div className="mt-auto">
@@ -302,7 +307,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-4">
                         <div className="hidden md:flex items-center gap-1 bg-white/5 rounded-lg p-1">
-                            {["Overview", "Match", "Trends"].map((tab) => (
+                            {["Overview", "Match", "Trends", "Heatmap"].map((tab) => (
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tab.toLowerCase() as any)}
@@ -484,6 +489,16 @@ export default function Dashboard() {
                             <PlayerPerformanceTrends
                                 data={performance_trends}
                                 loading={loading}
+                            />
+                        </div>
+                    )}
+
+                    {/* HEATMAP TAB */}
+                    {activeTab === "heatmap" && (
+                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom duration-500">
+                            <HeatmapVisualization
+                                heatmapData={heatmap_data}
+                                ddragonVersion={ddragon_version}
                             />
                         </div>
                     )}

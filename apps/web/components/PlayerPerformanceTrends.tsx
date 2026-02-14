@@ -91,6 +91,18 @@ export function PlayerPerformanceTrends({ data, loading = false }: PlayerPerform
                 winTrendDelta < -4 ? 'declining' :
                     'stable';
 
+    const trendLabel = winTrendDelta === undefined
+        ? 'N/A'
+        : trendState === 'improving'
+            ? 'Improving'
+            : trendState === 'declining'
+                ? 'Declining'
+                : 'Stable';
+
+    const trendDeltaText = winTrendDelta === undefined
+        ? undefined
+        : `${winTrendDelta >= 0 ? '+' : ''}${winTrendDelta.toFixed(0)}pp`;
+
     return (
         <div className="space-y-8">
             <header className="mb-6">
@@ -120,9 +132,10 @@ export function PlayerPerformanceTrends({ data, loading = false }: PlayerPerform
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Trend</p>
                     <div className={`flex items-center gap-1 ${trendState === 'improving' ? 'text-green-500' : trendState === 'declining' ? 'text-red-500' : 'text-slate-400'}`}>
                         <TrendingUp className={`w-4 h-4 ${trendState === 'declining' ? 'rotate-180' : ''}`} />
-                        <span className="font-bold">
-                            {trendState === 'improving' ? 'Improving' : trendState === 'declining' ? 'Declining' : 'Stable'}
-                        </span>
+                        <span className="font-bold">{trendLabel}</span>
+                        {trendDeltaText ? (
+                            <span className="text-[10px] font-mono font-bold opacity-80">{trendDeltaText}</span>
+                        ) : null}
                     </div>
                 </div>
             </div>
