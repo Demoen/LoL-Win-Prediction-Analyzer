@@ -238,6 +238,12 @@ export default function Dashboard() {
     const profileIconUrl = `https://ddragon.leagueoflegends.com/cdn/${ddragon_version}/img/profileicon/${user.profile_icon_id}.png`;
     const rankConfig = ranked_data?.tier ? RANK_COLORS[ranked_data.tier] : null;
 
+    const winProbDelta =
+        typeof win_probability === "number" && Number.isFinite(win_probability) &&
+        typeof win_rate === "number" && Number.isFinite(win_rate)
+            ? win_probability - win_rate
+            : undefined;
+
 
     return (
         <div className="min-h-screen bg-[#05050f] text-white font-sans selection:bg-[#5842F4]/30 pb-20">
@@ -321,7 +327,16 @@ export default function Dashboard() {
                                     <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Win Probability</h3>
                                     <div className="flex items-baseline gap-2">
                                         <div className="text-4xl font-black italic tracking-tighter text-white">{win_probability.toFixed(0)}<span className="text-xl text-[#5842F4]">%</span></div>
-                                        <span className="text-xs text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">+4.2%</span>
+                                        {winProbDelta !== undefined ? (
+                                            <span
+                                                className={cn(
+                                                    "text-xs font-bold px-2 py-0.5 rounded",
+                                                    winProbDelta >= 0 ? "text-green-400 bg-green-400/10" : "text-red-400 bg-red-400/10"
+                                                )}
+                                            >
+                                                {winProbDelta >= 0 ? "+" : ""}{winProbDelta.toFixed(1)}%
+                                            </span>
+                                        ) : null}
                                     </div>
                                     <div className="w-full bg-white/10 h-1.5 rounded-full mt-4 overflow-hidden">
                                         <div className={cn("h-full rounded-full", win_probability > 50 ? "bg-gradient-to-r from-[#5842F4] to-[#00D1FF]" : "bg-red-500")} style={{ width: `${win_probability}%` }}></div>

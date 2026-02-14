@@ -59,8 +59,6 @@ export function DetailedMatchAnalysis({
 }) {
     const [activeMetric, setActiveMetric] = useState<'gold' | 'vision' | 'aggression'>('gold');
 
-    if (!lastMatchStats) return null;
-
     // Destructure not needed anymore since they are passed as props
     // const { win_drivers: winDrivers, skill_focus: skillFocus, match_timeline_series: timelineSeries, last_match_stats: lastMatchStats, enemy_stats: enemyStats } = analysis;
 
@@ -69,28 +67,28 @@ export function DetailedMatchAnalysis({
         if (!timelineSeries?.timeline) return [];
 
         const maxTime = timelineSeries.timeline.length;
-        const finalVision = lastMatchStats?.visionScore || 0;
-        const finalEnemyVision = enemyStats?.visionScore || 0;
+        const finalVision = typeof lastMatchStats?.visionScore === 'number' ? lastMatchStats.visionScore : 0;
+        const finalEnemyVision = typeof enemyStats?.visionScore === 'number' ? enemyStats.visionScore : 0;
 
         return timelineSeries.timeline.map((point: any, i: number) => {
             const progress = i / maxTime;
 
             // Vision
-            const userVision = (finalVision * progress) * (0.9 + Math.random() * 0.2);
-            const enemyVision = (finalEnemyVision * progress) * (0.9 + Math.random() * 0.2);
+            const userVision = (finalVision * progress);
+            const enemyVision = (finalEnemyVision * progress);
 
             // Aggression (User)
             const prevGold = i > 0 ? timelineSeries.timeline[i - 1].myGold : 0;
             const income = i === 0 ? 500 : (point.myGold - prevGold);
             let userAggression = Math.max(0, (income - 300) / 7);
-            userAggression = Math.min(100, userAggression * (0.9 + Math.random() * 0.2));
+            userAggression = Math.min(100, userAggression);
 
             // Aggression (Enemy)
             const prevEnemyGold = i > 0 ? timelineSeries.timeline[i - 1].enemyGold || 0 : 0;
             const enemyGold = point.enemyGold || 0;
             const enemyIncome = i === 0 ? 500 : (enemyGold - prevEnemyGold);
             let enemyAggression = Math.max(0, (enemyIncome - 300) / 7);
-            enemyAggression = Math.min(100, enemyAggression * (0.9 + Math.random() * 0.2));
+            enemyAggression = Math.min(100, enemyAggression);
 
             // Gold
             const userGold = point.myGold || 0;
@@ -108,9 +106,17 @@ export function DetailedMatchAnalysis({
         });
     }, [timelineSeries, lastMatchStats, enemyStats]);
 
+    const toBarPct = (value: unknown, maxValue: number) => {
+        const n = Number(value);
+        if (!Number.isFinite(n) || !Number.isFinite(maxValue) || maxValue <= 0) return 0;
+        return Math.min(100, Math.max(0, (n / maxValue) * 100));
+    };
+
     const drivers = winDrivers || [];
     const focusAreas = skillFocus || [];
     const enemy = enemyStats || {};
+
+    if (!lastMatchStats) return null;
 
     // Helper: Map features to icons
     const getIconForFeature = (feature: string) => {
@@ -381,7 +387,11 @@ export function DetailedMatchAnalysis({
                                                     <span className="text-white font-mono">{typeof area.current === 'number' ? area.current.toFixed(1) : area.current}</span>
                                                 </div>
                                                 <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-slate-500" style={{ width: '60%' }}></div> {/* Static visual for now, or calculate % */}
+                                                    {(() => {
+                                                        const maxVal = Math.max(Number(area.current) || 0, Number(area.target) || 0, 1);
+                                                        const pct = toBarPct(area.current, maxVal);
+                                                        return <div className="h-full bg-slate-500" style={{ width: `${pct}%` }}></div>;
+                                                    })()}
                                                 </div>
                                             </div>
 
@@ -392,7 +402,11 @@ export function DetailedMatchAnalysis({
                                                     <span className="text-red-400 font-mono font-bold">{typeof area.target === 'number' ? area.target.toFixed(1) : area.target}</span>
                                                 </div>
                                                 <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-red-500" style={{ width: '90%' }}></div>
+                                                    {(() => {
+                                                        const maxVal = Math.max(Number(area.current) || 0, Number(area.target) || 0, 1);
+                                                        const pct = toBarPct(area.target, maxVal);
+                                                        return <div className="h-full bg-red-500" style={{ width: `${pct}%` }}></div>;
+                                                    })()}
                                                 </div>
                                             </div>
                                         </div>

@@ -12,6 +12,25 @@ interface PlayerPerformanceTrendsProps {
 export function PlayerPerformanceTrends({ data, loading = false }: PlayerPerformanceTrendsProps) {
     const [activeMetric, setActiveMetric] = useState<'kda' | 'aggression' | 'vision' | 'economy'>('kda');
 
+    const safeAvg = (rows: any[], key: string) => {
+        const vals = rows
+            .map((r) => Number(r?.[key]))
+            .filter((v) => Number.isFinite(v));
+        if (!vals.length) return undefined;
+        return vals.reduce((a, b) => a + b, 0) / vals.length;
+    };
+
+    const safeWinRate = (rows: any[]) => {
+        const wins = rows.filter((r) => !!r?.win).length;
+        return rows.length ? (wins / rows.length) * 100 : undefined;
+    };
+
+    const pctChange = (recentAvg: number | undefined, prevAvg: number | undefined) => {
+        if (recentAvg === undefined || prevAvg === undefined) return undefined;
+        if (!Number.isFinite(recentAvg) || !Number.isFinite(prevAvg) || prevAvg === 0) return undefined;
+        return ((recentAvg - prevAvg) / prevAvg) * 100;
+    };
+
     // Format data for the chart (reverse so timeline goes left to right)
     const chartData = useMemo(() => {
         if (!data || data.length === 0) return [];
@@ -49,6 +68,29 @@ export function PlayerPerformanceTrends({ data, loading = false }: PlayerPerform
     const avgKda = data.length ? (data.reduce((acc, curr) => acc + (curr.kda || 0), 0) / data.length) : 0;
     const winRate = data.length ? (data.filter(g => g.win).length / data.length * 100) : 0;
 
+    const recent10 = data?.slice(0, 10) || [];
+    const prev10 = data?.slice(10, 20) || [];
+    const recent5 = data?.slice(0, 5) || [];
+    const prev5 = data?.slice(5, 10) || [];
+
+    const visionKey = data?.some((d) => Number.isFinite(Number(d?.visionDominance))) ? 'visionDominance' : 'visionScore';
+    const aggressionKey = data?.some((d) => Number.isFinite(Number(d?.aggressionScore))) ? 'aggressionScore' : 'damagePerMinute';
+
+    const visionDeltaPct = pctChange(safeAvg(recent10, visionKey), safeAvg(prev10, visionKey));
+    const aggressionDeltaPct = pctChange(safeAvg(recent10, aggressionKey), safeAvg(prev10, aggressionKey));
+    const winTrendDelta = (() => {
+        const r = safeWinRate(recent5);
+        const p = safeWinRate(prev5);
+        if (r === undefined || p === undefined) return undefined;
+        return r - p;
+    })();
+
+    const trendState: 'improving' | 'declining' | 'stable' =
+        winTrendDelta === undefined ? 'stable' :
+            winTrendDelta > 4 ? 'improving' :
+                winTrendDelta < -4 ? 'declining' :
+                    'stable';
+
     return (
         <div className="space-y-8">
             <header className="mb-6">
@@ -76,9 +118,11 @@ export function PlayerPerformanceTrends({ data, loading = false }: PlayerPerform
                 </div>
                 <div className="bg-[#0a0a0f] border border-white/10 p-5 rounded-2xl relative overflow-hidden group">
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Trend</p>
-                    <div className="flex items-center text-green-500 gap-1">
-                        <TrendingUp className="w-4 h-4" />
-                        <span className="font-bold">Improving</span>
+                    <div className={`flex items-center gap-1 ${trendState === 'improving' ? 'text-green-500' : trendState === 'declining' ? 'text-red-500' : 'text-slate-400'}`}>
+                        <TrendingUp className={`w-4 h-4 ${trendState === 'declining' ? 'rotate-180' : ''}`} />
+                        <span className="font-bold">
+                            {trendState === 'improving' ? 'Improving' : trendState === 'declining' ? 'Declining' : 'Stable'}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -181,7 +225,15 @@ export function PlayerPerformanceTrends({ data, loading = false }: PlayerPerform
                             <Eye className="w-5 h-5" />
                         </div>
                         <h4 className="font-bold text-white mb-1">Vision Dominance</h4>
-                        <p className="text-sm text-slate-400">Your vision score is trending <span className="text-green-500 font-bold">+15%</span> over the last 10 games.</p>
+                        {visionDeltaPct === undefined ? (
+                            <p className="text-sm text-slate-400">Not enough match history yet to calculate a trend.</p>
+                        ) : (
+                            <p className="text-sm text-slate-400">
+                                Your {visionKey === 'visionDominance' ? 'vision dominance' : 'vision score'} is trending{' '}
+                                <span className={`${visionDeltaPct >= 0 ? 'text-green-500' : 'text-red-500'} font-bold`}>{visionDeltaPct >= 0 ? '+' : ''}{visionDeltaPct.toFixed(0)}%</span>
+                                {' '}over the last 10 games.
+                            </p>
+                        )}
                     </div>
 
                     <div className="bg-[#0a0a0f] border border-white/10 p-6 rounded-2xl hover:bg-white/[0.03] transition-all group relative overflow-hidden">
@@ -189,7 +241,15 @@ export function PlayerPerformanceTrends({ data, loading = false }: PlayerPerform
                             <Crosshair className="w-5 h-5" />
                         </div>
                         <h4 className="font-bold text-white mb-1">Aggression</h4>
-                        <p className="text-sm text-slate-400">Solo kill participation has dropped. Consider taking more calculated risks.</p>
+                        {aggressionDeltaPct === undefined ? (
+                            <p className="text-sm text-slate-400">Not enough match history yet to calculate a trend.</p>
+                        ) : aggressionDeltaPct < -5 ? (
+                            <p className="text-sm text-slate-400">Your aggression is down recently. Consider taking more calculated risks when you have tempo.</p>
+                        ) : aggressionDeltaPct > 5 ? (
+                            <p className="text-sm text-slate-400">Your aggression is up recently. Keep it disciplined so you don’t give back shutdown gold.</p>
+                        ) : (
+                            <p className="text-sm text-slate-400">Your aggression is stable. Look for small, repeatable advantages instead of forced fights.</p>
+                        )}
                     </div>
 
                     <div className="bg-[#0a0a0f] border border-white/10 p-6 rounded-2xl hover:bg-white/[0.03] transition-all group relative overflow-hidden">
@@ -197,7 +257,21 @@ export function PlayerPerformanceTrends({ data, loading = false }: PlayerPerform
                             <Target className="w-5 h-5" />
                         </div>
                         <h4 className="font-bold text-white mb-1">Consistency</h4>
-                        <p className="text-sm text-slate-400">Your CS/min variance is minimal. You are a consistent farmer.</p>
+                        {chartData.length ? (
+                            <p className="text-sm text-slate-400">
+                                {(() => {
+                                    const recentConsistency = safeAvg(chartData.slice(-10), 'consistency');
+                                    if (recentConsistency === undefined || !Number.isFinite(recentConsistency)) {
+                                        return 'Not enough match history yet to calculate consistency.';
+                                    }
+                                    if (recentConsistency >= 80) return 'Your gold/min variance is low. You are playing a consistent tempo game.';
+                                    if (recentConsistency >= 60) return 'Your tempo is somewhat swingy. Try to stabilize your first two resets.';
+                                    return 'Your games are highly variable. Focus on repeatable early-game fundamentals.';
+                                })()}
+                            </p>
+                        ) : (
+                            <p className="text-sm text-slate-400">Not enough match history yet to calculate consistency.</p>
+                        )}
                     </div>
                 </div>
             </div>

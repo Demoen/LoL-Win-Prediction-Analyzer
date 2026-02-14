@@ -382,7 +382,16 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
              traceback.print_exc()
              yield json.dumps({"type": "error", "message": f"Server error: {str(e)}"}) + "\n"
 
-    return StreamingResponse(analysis_generator(), media_type="application/x-ndjson")
+    headers = {
+        "Cache-Control": "no-cache, no-transform",
+        "X-Accel-Buffering": "no",
+        "Connection": "keep-alive",
+    }
+    return StreamingResponse(
+        analysis_generator(),
+        media_type="application/x-ndjson; charset=utf-8",
+        headers=headers,
+    )
 
 
 async def analyze_territory_for_player(db: AsyncSession, puuid: str, region: str, limit: int = 5) -> dict:

@@ -1,10 +1,29 @@
+import type { AnalyzeProgressUpdate, AnalysisResult } from "./analysisContract";
+import { normalizeAnalysisResult } from "./analysisContract";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+
+type AnalyzeStreamEvent =
+    | { type: "progress"; message: string; percent: number }
+    | { type: "result"; data: unknown }
+    | { type: "error"; message: string };
+
+function parseAnalyzeEvent(line: string): AnalyzeStreamEvent | undefined {
+    try {
+        const event = JSON.parse(line);
+        if (!event || typeof event !== 'object') return undefined;
+        if (typeof event.type !== 'string') return undefined;
+        return event as AnalyzeStreamEvent;
+    } catch {
+        return undefined;
+    }
+}
 
 export async function analyzeStats(
     riotId: string,
     region: string,
-    onProgress?: (progress: { message: string, percent: number }) => void
-) {
+    onProgress?: (progress: AnalyzeProgressUpdate) => void
+): Promise<AnalysisResult> {
 
     try {
         const response = await fetch(`${API_URL}/analyze`, {
@@ -12,6 +31,7 @@ export async function analyzeStats(
             headers: {
                 "Content-Type": "application/json",
             },
+            cache: "no-store",
             body: JSON.stringify({ riot_id: riotId, region }),
         });
 
@@ -41,21 +61,15 @@ export async function analyzeStats(
                 
                 if (!line) continue;
 
-                try {
-                    const event = JSON.parse(line);
+                const event = parseAnalyzeEvent(line);
+                if (!event) continue;
 
-                    if (event.type === "progress" && onProgress) {
-                        onProgress({ message: event.message, percent: event.percent });
-                    } else if (event.type === "result") {
-                        return event.data;
-                    } else if (event.type === "error") {
-                        throw new Error(event.message);
-                    }
-                } catch (e) {
-                    // JSON parse error - ignore partial chunks
-                    // If parse fails, the line might be incomplete - it will be handled
-                    // when more data arrives, but since we only process on newlines,
-                    // this shouldn't happen for complete lines
+                if (event.type === "progress" && onProgress) {
+                    onProgress({ message: event.message, percent: event.percent });
+                } else if (event.type === "result") {
+                    return normalizeAnalysisResult(event.data);
+                } else if (event.type === "error") {
+                    throw new Error(event.message);
                 }
             }
             
@@ -64,16 +78,9 @@ export async function analyzeStats(
         
         // Handle any remaining buffer content after stream ends
         if (buffer.trim()) {
-            try {
-                const event = JSON.parse(buffer.trim());
-                if (event.type === "result") {
-                    return event.data;
-                } else if (event.type === "error") {
-                    throw new Error(event.message);
-                }
-            } catch (e) {
-                // Ignore parse errors on final buffer
-            }
+            const event = parseAnalyzeEvent(buffer.trim());
+            if (event?.type === "result") return normalizeAnalysisResult(event.data);
+            if (event?.type === "error") throw new Error(event.message);
         }
         
         // If we reach here without returning, the stream ended without a result

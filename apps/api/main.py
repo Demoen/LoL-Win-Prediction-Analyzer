@@ -14,12 +14,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Riot Win Prediction API", lifespan=lifespan)
 
 # CORS setup
-origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+
+# If you set ALLOWED_ORIGINS="*" we must disable credentials (browser/CORS spec)
+allow_all = len(origins) == 1 and origins[0] == "*"
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"] if allow_all else origins,
+    allow_credentials=False if allow_all else True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
