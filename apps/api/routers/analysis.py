@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from database import get_db
 from services.ingestion import IngestionService
 from services.riot import riot_service
+from services.ddragon import get_ddragon_version
 from ml.pipeline import load_player_data
 from ml.training import model_instance
 from ml.timeline_analysis import analyze_match_territory, aggregate_territory_metrics, analyze_match_timeline_series, extract_heatmap_data
@@ -60,9 +61,6 @@ def sanitize_for_json(obj):
         return sanitize_for_json(obj.tolist())
     return obj
 
-# Data Dragon version for profile icons
-DDRAGON_VERSION = "14.24.1"
-
 # Region to routing mapping
 REGION_TO_ROUTING = {
     "euw1": "europe", "eun1": "europe", "tr1": "europe", "ru": "europe",
@@ -86,6 +84,8 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
     async def analysis_generator():
         try:
             yield json.dumps({"type": "progress", "message": "Finding user account...", "percent": 5}) + "\n"
+
+            ddragon_version = await get_ddragon_version()
             
             # 2. Ingest Data
             ingestion = IngestionService(db)
@@ -362,7 +362,7 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
                 "total_matches": len(df),
                 "territory_metrics": territory_metrics,
                 "ranked_data": ranked_data,
-                "ddragon_version": DDRAGON_VERSION,
+                "ddragon_version": ddragon_version,
                 "heatmap_data": heatmap_data
             }
             
