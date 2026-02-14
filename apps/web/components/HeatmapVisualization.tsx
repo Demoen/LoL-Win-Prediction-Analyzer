@@ -5,7 +5,9 @@ import { Map, Skull, Eye, Coins, Users, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { HeatmapData, HeatmapParticipant } from "@/lib/analysisContract";
 
-const MAP_MAX_FALLBACK = 15000;
+// Riot timeline coordinates for Summoner's Rift are effectively in a ~0..15000 space.
+// Using a canonical max (instead of data-derived max) keeps alignment stable with the minimap.
+const MAP_COORD_MAX = 15000;
 const GRID_SIZE = 128;
 
 interface HeatmapVisualizationProps {
@@ -72,30 +74,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
     const [selectedParticipant, setSelectedParticipant] = useState<number | null>(null);
     const [layers, setLayers] = useState({ positions: true, kills: true, wards: false, goldZones: false });
 
-    const mapMax = useMemo(() => {
-        if (!heatmapData) return MAP_MAX_FALLBACK;
-
-        let max = MAP_MAX_FALLBACK;
-
-        for (const p of heatmapData.participants || []) {
-            for (const pos of p.positions || []) {
-                if (typeof pos?.x === 'number' && pos.x > max) max = pos.x;
-                if (typeof pos?.y === 'number' && pos.y > max) max = pos.y;
-            }
-        }
-
-        for (const k of heatmapData.kill_events || []) {
-            if (typeof k?.x === 'number' && k.x > max) max = k.x;
-            if (typeof k?.y === 'number' && k.y > max) max = k.y;
-        }
-
-        for (const w of heatmapData.ward_events || []) {
-            if (typeof w?.x === 'number' && w.x > max) max = w.x;
-            if (typeof w?.y === 'number' && w.y > max) max = w.y;
-        }
-
-        return max;
-    }, [heatmapData]);
+    const clampMap = (v: number) => Math.max(0, Math.min(MAP_COORD_MAX, v));
 
     // Load map image once
     useEffect(() => {
@@ -103,8 +82,8 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
         const img = new Image();
         img.crossOrigin = "anonymous";
 
-        const primary = "/map-dark.png";
-        const fallback = `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/map/map11.png`;
+        const primary = `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/map/map11.png`;
+        const fallback = "/map-dark.png";
         let usedFallback = false;
 
         img.onload = () => {
@@ -139,8 +118,10 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
 
         for (const p of participants) {
             for (const pos of p.positions) {
-                const gx = Math.floor((pos.x / mapMax) * (GRID_SIZE - 1));
-                const gy = Math.floor(((mapMax - pos.y) / mapMax) * (GRID_SIZE - 1)); // flip Y
+                const x = clampMap(pos.x);
+                const y = clampMap(pos.y);
+                const gx = Math.floor((x / MAP_COORD_MAX) * (GRID_SIZE - 1));
+                const gy = Math.floor(((MAP_COORD_MAX - y) / MAP_COORD_MAX) * (GRID_SIZE - 1)); // flip Y
                 if (gx >= 0 && gx < GRID_SIZE && gy >= 0 && gy < GRID_SIZE) {
                     grid[gy * GRID_SIZE + gx] += 1;
                 }
@@ -152,7 +133,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
         for (let i = 0; i < grid.length; i++) if (grid[i] > max) max = grid[i];
         if (max > 0) for (let i = 0; i < grid.length; i++) grid[i] /= max;
         return grid;
-    }, [heatmapData, selectedParticipant, mapMax]);
+    }, [heatmapData, selectedParticipant]);
 
     const goldGrid = useMemo(() => {
         if (!heatmapData) return null;
@@ -164,8 +145,10 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
         for (const p of participants) {
             for (const pos of p.positions) {
                 if (pos.goldDelta <= 0) continue;
-                const gx = Math.floor((pos.x / mapMax) * (GRID_SIZE - 1));
-                const gy = Math.floor(((mapMax - pos.y) / mapMax) * (GRID_SIZE - 1));
+                const x = clampMap(pos.x);
+                const y = clampMap(pos.y);
+                const gx = Math.floor((x / MAP_COORD_MAX) * (GRID_SIZE - 1));
+                const gy = Math.floor(((MAP_COORD_MAX - y) / MAP_COORD_MAX) * (GRID_SIZE - 1));
                 if (gx >= 0 && gx < GRID_SIZE && gy >= 0 && gy < GRID_SIZE) {
                     grid[gy * GRID_SIZE + gx] += pos.goldDelta;
                 }
@@ -174,9 +157,10 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
         blurGrid(grid, GRID_SIZE, GRID_SIZE, 3);
         let max = 0;
         for (let i = 0; i < grid.length; i++) if (grid[i] > max) max = grid[i];
-        if (max > 0) for (let i = 0; i < grid.length; i++) grid[i] /= max;
+        // Normalize with compression so a few large spikes don't wash out the whole map
+        if (max > 0) for (let i = 0; i < grid.length; i++) grid[i] = Math.sqrt(grid[i] / max);
         return grid;
-    }, [heatmapData, selectedParticipant, mapMax]);
+    }, [heatmapData, selectedParticipant]);
 
     // ── Canvas rendering ──
     const draw = useCallback(() => {
@@ -207,10 +191,14 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
         ctx.drawImage(mapImg, 0, 0, W, H);
         ctx.globalAlpha = 1;
 
+        // Darken the official minimap to match your aesthetic while keeping exact geometry
+        ctx.fillStyle = "rgba(5,5,15,0.55)";
+        ctx.fillRect(0, 0, W, H);
+
         // Helper: map coords → canvas coords
         const toCanvas = (mx: number, my: number) => ({
-            x: (mx / mapMax) * W,
-            y: ((mapMax - my) / mapMax) * H,
+            x: (clampMap(mx) / MAP_COORD_MAX) * W,
+            y: ((MAP_COORD_MAX - clampMap(my)) / MAP_COORD_MAX) * H,
         });
 
         // ── Position Heat Layer ──
@@ -303,17 +291,17 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
 
                 ctx.save();
                 ctx.shadowColor = color;
-                ctx.shadowBlur = 8;
+                ctx.shadowBlur = 12;
+                ctx.globalAlpha = 0.95;
 
                 // Diamond shape
                 ctx.beginPath();
-                ctx.moveTo(x, y - 5);
-                ctx.lineTo(x + 4, y);
-                ctx.lineTo(x, y + 5);
-                ctx.lineTo(x - 4, y);
+                ctx.moveTo(x, y - 7);
+                ctx.lineTo(x + 6, y);
+                ctx.lineTo(x, y + 7);
+                ctx.lineTo(x - 6, y);
                 ctx.closePath();
                 ctx.fillStyle = color;
-                ctx.globalAlpha = 0.85;
                 ctx.fill();
                 ctx.strokeStyle = "rgba(255,255,255,0.4)";
                 ctx.lineWidth = 1;
@@ -330,7 +318,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
         ctx.fillStyle = vg;
         ctx.fillRect(0, 0, W, H);
 
-    }, [mapLoaded, heatmapData, selectedParticipant, layers, positionGrid, goldGrid, mapMax]);
+    }, [mapLoaded, heatmapData, selectedParticipant, layers, positionGrid, goldGrid]);
 
     // Redraw on any state change
     useEffect(() => { draw(); }, [draw]);
