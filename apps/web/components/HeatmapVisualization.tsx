@@ -74,10 +74,31 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
 
     // Load map image once
     useEffect(() => {
+        setMapLoaded(false);
         const img = new Image();
-        img.src = "/map-dark.png";
-        img.onload = () => { mapImgRef.current = img; setMapLoaded(true); };
-    }, []);
+        img.crossOrigin = "anonymous";
+
+        const primary = `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/map/map11.png`;
+        const fallback = "/map-dark.png";
+        let usedFallback = false;
+
+        img.onload = () => {
+            mapImgRef.current = img;
+            setMapLoaded(true);
+        };
+        img.onerror = () => {
+            if (usedFallback) return;
+            usedFallback = true;
+            img.src = fallback;
+        };
+
+        img.src = primary;
+
+        return () => {
+            img.onload = null;
+            img.onerror = null;
+        };
+    }, [ddragonVersion]);
 
     // Separate participants by team
     const blueTeam = useMemo(() => heatmapData?.participants.filter(p => p.teamId === 100) ?? [], [heatmapData]);
