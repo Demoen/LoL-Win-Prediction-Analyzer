@@ -385,6 +385,7 @@ export default function Dashboard() {
                                     <BarChart3 className="w-6 h-6 text-amber-500" />
                                     Predictive Indicators
                                     <span className="px-3 py-1 bg-amber-500/10 text-amber-500 rounded text-[10px] font-bold uppercase tracking-widest">Early Game Analysis</span>
+                                    <span className="px-3 py-1 bg-white/5 text-zinc-400 rounded text-[10px] font-bold uppercase tracking-widest">{total_matches} matches</span>
                                 </h3>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -706,26 +706,39 @@ class WinPredictionModel:
         # Sort by diff_pct descending, weighted by category priority
         # Priority: Combat/Gold/Aggression > Vision/Pings
         priority_weights = {
-            'damageDealtToChampions': 1.5,
-            'goldPerMinute': 1.5,
-            'soloKills': 1.5,
-            'aggressionScore': 1.5,
-            'totalMinionsKilled': 1.4,
+            # High priority — laning fundamentals
+            'earlyLaningPhaseGoldExpAdvantage': 1.6,
+            'laningPhaseGoldExpAdvantage': 1.6,
+            'maxCsAdvantageOnLaneOpponent': 1.5,
+            'maxLevelLeadLaneOpponent': 1.5,
+            'laneMinionsFirst10Minutes': 1.4,
             'turretPlatesTaken': 1.4,
-            'earlyLaningPhaseGoldExpAdvantage': 1.4,
-            'laningPhaseGoldExpAdvantage': 1.4,
-            'killParticipation': 1.3,
-            
-            # Low Priority
-            'visionScore': 0.6,
+            'skillshotHitRate': 1.3,
+            'skillshotDodgeRate': 1.3,
+            'visionScoreAdvantageLaneOpponent': 1.2,
+
+            # Medium priority
+            'damageDealtToChampions': 1.0,
+            'goldPerMinute': 1.0,
+            'soloKills': 1.0,
+            'aggressionScore': 1.0,
+            'totalMinionsKilled': 1.0,
+            'killParticipation': 1.0,
+
+            # Low priority — vision habits
             'wardsPlaced': 0.5,
             'controlWardsPlaced': 0.5,
-            'enemyMissingPings': 0.4,
-            'onMyWayPings': 0.4,
-            'assistMePings': 0.4,
-            'getBackPings': 0.4
+            'controlWardTimeCoverageInRiverOrEnemyHalf': 0.5,
+            'detectorWardsPlaced': 0.5,
+            'visionScore': 0.5,
+
+            # Very low priority — pings (deprioritized)
+            'enemyMissingPings': 0.1,
+            'onMyWayPings': 0.1,
+            'assistMePings': 0.1,
+            'getBackPings': 0.1,
         }
-        
+
         drivers.sort(key=lambda x: x['diff_pct'] * priority_weights.get(x['feature'], 1.0), reverse=True)
         return drivers[:3] # Top 3
 
@@ -843,21 +856,36 @@ class WinPredictionModel:
         # Sort by diff (lowest/most negative first), weighted by priority.
         # Weight > 1 makes the negative diff LARGER (more negative) -> Higher priority
         priority_weights = {
-            'damageDealtToChampions': 1.5,
-            'goldPerMinute': 1.5,
-            'soloKills': 1.5,
-            'aggressionScore': 1.5,
-            'totalMinionsKilled': 1.4,
+            # High priority — laning fundamentals
+            'earlyLaningPhaseGoldExpAdvantage': 1.6,
+            'laningPhaseGoldExpAdvantage': 1.6,
+            'maxCsAdvantageOnLaneOpponent': 1.5,
+            'maxLevelLeadLaneOpponent': 1.5,
+            'laneMinionsFirst10Minutes': 1.4,
             'turretPlatesTaken': 1.4,
-            'earlyLaningPhaseGoldExpAdvantage': 1.4,
-            'laningPhaseGoldExpAdvantage': 1.4,
-            'maxCsAdvantageOnLaneOpponent': 1.4,
-            
-            # Low Priority
-            'visionScore': 0.6,
+            'skillshotHitRate': 1.3,
+            'skillshotDodgeRate': 1.3,
+            'visionScoreAdvantageLaneOpponent': 1.2,
+
+            # Medium priority
+            'damageDealtToChampions': 1.0,
+            'goldPerMinute': 1.0,
+            'soloKills': 1.0,
+            'aggressionScore': 1.0,
+            'totalMinionsKilled': 1.0,
+
+            # Low priority — vision habits
             'wardsPlaced': 0.5,
             'controlWardsPlaced': 0.5,
-            'enemyMissingPings': 0.4
+            'controlWardTimeCoverageInRiverOrEnemyHalf': 0.5,
+            'detectorWardsPlaced': 0.5,
+            'visionScore': 0.5,
+
+            # Very low priority — pings
+            'enemyMissingPings': 0.1,
+            'onMyWayPings': 0.1,
+            'assistMePings': 0.1,
+            'getBackPings': 0.1,
         }
         
         improvements.sort(key=lambda x: x['diff'] * priority_weights.get(x['feature'], 1.0)) 
