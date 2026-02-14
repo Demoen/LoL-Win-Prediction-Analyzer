@@ -66,6 +66,31 @@ function goldColor(t: number): [number, number, number, number] {
     return [255, Math.round(215 - 75 * f), 0, Math.round(80 + 80 * f)];
 }
 
+function championAssetKey(championName: string): string {
+    // DDragon uses champion "id" keys, which differ from display names for a few champs.
+    // Also remove punctuation like apostrophes.
+    const aliases: Record<string, string> = {
+        "Wukong": "MonkeyKing",
+        "Nunu": "Nunu",
+        "Nunu & Willump": "Nunu",
+        "Renata Glasc": "Renata",
+        "Cho'Gath": "Chogath",
+        "Kha'Zix": "Khazix",
+        "Kai'Sa": "Kaisa",
+        "Vel'Koz": "Velkoz",
+        "LeBlanc": "Leblanc",
+        "Kog'Maw": "KogMaw",
+        "Rek'Sai": "RekSai",
+        "Bel'Veth": "Belveth",
+    };
+
+    if (aliases[championName]) return aliases[championName];
+
+    return championName
+        .replace(/[^A-Za-z]/g, "")
+        .replace(/^([a-z])/, (m) => m.toUpperCase());
+}
+
 export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVisualizationProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -150,7 +175,8 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                 const gx = Math.floor((x / MAP_COORD_MAX) * (GRID_SIZE - 1));
                 const gy = Math.floor(((MAP_COORD_MAX - y) / MAP_COORD_MAX) * (GRID_SIZE - 1));
                 if (gx >= 0 && gx < GRID_SIZE && gy >= 0 && gy < GRID_SIZE) {
-                    grid[gy * GRID_SIZE + gx] += pos.goldDelta;
+                    // Use log scaling so a few huge spikes don't dominate the whole layer
+                    grid[gy * GRID_SIZE + gx] += Math.log1p(pos.goldDelta);
                 }
             }
         }
@@ -237,8 +263,13 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
             off.width = GRID_SIZE;
             off.height = GRID_SIZE;
             off.getContext("2d")!.putImageData(imgData, 0, 0);
+            ctx.save();
             ctx.globalCompositeOperation = "lighter";
+            // Blur while scaling to remove blocky grid artifacts
+            ctx.filter = "blur(6px)";
+            ctx.globalAlpha = 0.9;
             ctx.drawImage(off, 0, 0, W, H);
+            ctx.restore();
             ctx.globalCompositeOperation = "source-over";
         }
 
@@ -377,9 +408,16 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                             title={p.championName}
                         >
                             <img
-                                src={`https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${p.championName}.png`}
+                                src={`https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${championAssetKey(p.championName)}.png`}
                                 alt={p.championName}
                                 className="w-full h-full object-cover"
+                                onError={(e) => {
+                                    const img = e.currentTarget;
+                                    if (!img.dataset.fallback) {
+                                        img.dataset.fallback = "1";
+                                        img.src = "/logo.png";
+                                    }
+                                }}
                             />
                         </button>
                     ))}
@@ -401,9 +439,16 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                             title={p.championName}
                         >
                             <img
-                                src={`https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${p.championName}.png`}
+                                src={`https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${championAssetKey(p.championName)}.png`}
                                 alt={p.championName}
                                 className="w-full h-full object-cover"
+                                onError={(e) => {
+                                    const img = e.currentTarget;
+                                    if (!img.dataset.fallback) {
+                                        img.dataset.fallback = "1";
+                                        img.src = "/logo.png";
+                                    }
+                                }}
                             />
                         </button>
                     ))}
