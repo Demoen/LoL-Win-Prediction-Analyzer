@@ -399,7 +399,6 @@ export default function Dashboard() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                     <DetailBlock title="Early Game Leads" icon={Zap} color="text-amber-400">
-                                        <StatRow label="Gold/XP @8m" value={fmtSigned(avg.earlyLaningPhaseGoldExpAdvantage)} valueColor={(Number(avg.earlyLaningPhaseGoldExpAdvantage) || 0) > 0 ? "text-green-400" : "text-red-400"} />
                                         <StatRow label="Gold Lead @14m" value={fmtSigned(avg.laneGoldLeadAt14)} valueColor={(Number(avg.laneGoldLeadAt14) || 0) > 0 ? "text-green-400" : "text-red-400"} />
                                         <StatRow label="XP Lead @14m" value={fmtSigned(avg.laneXpLeadAt14)} valueColor={(Number(avg.laneXpLeadAt14) || 0) > 0 ? "text-green-400" : "text-red-400"} />
                                         <StatRow label="Max CS Lead" value={fmtSigned(avg.maxCsAdvantageOnLaneOpponent)} valueColor={(Number(avg.maxCsAdvantageOnLaneOpponent) || 0) > 0 ? "text-green-400" : "text-red-400"} />

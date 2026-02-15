@@ -12,9 +12,10 @@ interface StatComparisonRowProps {
     decimal?: number;
     inverse?: boolean; // If true, lower is better (e.g. deaths)
     signed?: boolean; // If true, render userValue with +/- sign (useful for lead/delta stats)
+    signedEnemy?: boolean; // If true, render enemyValue with +/- sign
 }
 
-const StatComparisonRow = ({ label, userValue, enemyValue, unit = '', decimal = 1, inverse = false, signed = false }: StatComparisonRowProps) => {
+const StatComparisonRow = ({ label, userValue, enemyValue, unit = '', decimal = 1, inverse = false, signed = false, signedEnemy = false }: StatComparisonRowProps) => {
     let diff = userValue - enemyValue;
     if (inverse) diff = -diff; // Invert logic for negative stats
 
@@ -38,7 +39,7 @@ const StatComparisonRow = ({ label, userValue, enemyValue, unit = '', decimal = 
                 </div>
                 <div className="text-[10px] text-slate-600 font-mono">vs</div>
                 <div className={`text-xs font-mono font-bold ${!isWinning && !isEven ? 'text-red-400' : 'text-[#5842F4]/70'}`}>
-                    {format(enemyValue, false)}{unit}
+                    {format(enemyValue, signedEnemy)}{unit}
                 </div>
             </div>
         </div>
@@ -119,6 +120,14 @@ export function DetailedMatchAnalysis({
     const focusAreas = skillFocus || [];
     const enemy = enemyStats || {};
 
+    const toPct = (value: unknown) => {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return 0;
+        // Most Riot challenge coverage stats are ratios in [0,1]. If it already looks like a percent, keep it.
+        if (n >= 0 && n <= 1) return n * 100;
+        return n;
+    };
+
     if (!lastMatchStats) return null;
 
     // Helper: Map features to icons
@@ -187,9 +196,24 @@ export function DetailedMatchAnalysis({
                             <h3 className="font-bold text-white text-sm uppercase tracking-wider">Economy</h3>
                         </div>
                         <div className="space-y-1">
-                            <StatComparisonRow label="Gold+XP Lead @8m" userValue={Number(lastMatchStats.earlyLaningPhaseGoldExpAdvantage) || 0} enemyValue={0} decimal={0} signed />
-                            <StatComparisonRow label="Gold+XP Lead @14m" userValue={Number(lastMatchStats.laningPhaseGoldExpAdvantage) || 0} enemyValue={0} decimal={0} signed />
-                            <StatComparisonRow label="Max CS Lead" userValue={Number(lastMatchStats.maxCsAdvantageOnLaneOpponent) || 0} enemyValue={0} decimal={0} signed />
+                            {(() => {
+                                const lead8 = Number(lastMatchStats.earlyLaningPhaseGoldExpAdvantage) || 0;
+                                const enemyLead8Raw = Number(enemy.earlyLaningPhaseGoldExpAdvantage);
+                                const enemyLead8 = Number.isFinite(enemyLead8Raw) && enemyLead8Raw !== 0 ? enemyLead8Raw : -lead8;
+
+                                const lead14 = Number(lastMatchStats.laningPhaseGoldExpAdvantage) || 0;
+                                const enemyLead14Raw = Number(enemy.laningPhaseGoldExpAdvantage);
+                                const enemyLead14 = Number.isFinite(enemyLead14Raw) && enemyLead14Raw !== 0 ? enemyLead14Raw : -lead14;
+
+                                return (
+                                    <>
+                                        <StatComparisonRow label="Gold+XP Lead @8m" userValue={lead8} enemyValue={enemyLead8} decimal={0} signed signedEnemy />
+                                        <StatComparisonRow label="Gold+XP Lead @14m" userValue={lead14} enemyValue={enemyLead14} decimal={0} signed signedEnemy />
+                                    </>
+                                );
+                            })()}
+                            <StatComparisonRow label="Max CS Lead" userValue={Number(lastMatchStats.maxCsAdvantageOnLaneOpponent) || 0} enemyValue={Number(enemy.maxCsAdvantageOnLaneOpponent) || 0} decimal={0} signed signedEnemy />
+                            <StatComparisonRow label="Max Level Lead" userValue={Number(lastMatchStats.maxLevelLeadLaneOpponent) || 0} enemyValue={Number(enemy.maxLevelLeadLaneOpponent) || 0} decimal={0} signed signedEnemy />
                             <StatComparisonRow label="Gold/Min" userValue={lastMatchStats.goldPerMinute || 0} enemyValue={enemy.goldPerMinute || 0} decimal={0} />
                             <StatComparisonRow label="CS/Min" userValue={(lastMatchStats.totalMinionsKilled || 0) / (lastMatchStats.gameDuration / 60 || 1)} enemyValue={(enemy.totalMinionsKilled || 0) / (lastMatchStats.gameDuration / 60 || 1)} decimal={1} />
                             <StatComparisonRow label="Total CS" userValue={lastMatchStats.totalMinionsKilled || 0} enemyValue={enemy.totalMinionsKilled || 0} />
@@ -210,6 +234,8 @@ export function DetailedMatchAnalysis({
                             <StatComparisonRow label="Vision Score" userValue={lastMatchStats.visionScore || 0} enemyValue={enemy.visionScore || 0} decimal={0} />
                             <StatComparisonRow label="Wards Placed" userValue={lastMatchStats.wardsPlaced || 0} enemyValue={enemy.wardsPlaced || 0} />
                             <StatComparisonRow label="Control Wards" userValue={lastMatchStats.controlWardsPlaced || 0} enemyValue={enemy.controlWardsPlaced || 0} />
+                            <StatComparisonRow label="Vision Score Lead" userValue={Number(lastMatchStats.visionScoreAdvantageLaneOpponent) || 0} enemyValue={Number(enemy.visionScoreAdvantageLaneOpponent) || 0} decimal={1} signed signedEnemy />
+                            <StatComparisonRow label="Deep Vision Time" userValue={toPct(lastMatchStats.controlWardTimeCoverageInRiverOrEnemyHalf)} enemyValue={toPct(enemy.controlWardTimeCoverageInRiverOrEnemyHalf)} unit="%" decimal={0} />
                             <StatComparisonRow label="Obj Damage" userValue={lastMatchStats.damageDealtToObjectives || 0} enemyValue={enemy.towerDamageDealt || 0} decimal={0} />
                             <StatComparisonRow label="Lane CS@10" userValue={lastMatchStats.laneMinionsFirst10Minutes || 0} enemyValue={enemy.laneMinionsFirst10Minutes || 0} />
                         </div>
