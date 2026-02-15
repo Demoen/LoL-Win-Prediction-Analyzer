@@ -184,6 +184,8 @@ export function DetailedMatchAnalysis({
                             <StatComparisonRow label="Solo Kills" userValue={lastMatchStats.soloKills || 0} enemyValue={enemy.soloKills || 0} />
                             <StatComparisonRow label="Participation" userValue={(lastMatchStats.killParticipation || 0) * 100} enemyValue={(enemy.killParticipation || 0) * 100} unit="%" decimal={0} />
                             <StatComparisonRow label="Skillshot Hit" userValue={lastMatchStats.skillshotHitRate || 0} enemyValue={enemy.skillshotHitRate || 0} unit="%" decimal={1} />
+                            <StatComparisonRow label="Max CS Lead" userValue={Number(lastMatchStats.maxCsAdvantageOnLaneOpponent) || 0} enemyValue={Number(enemy.maxCsAdvantageOnLaneOpponent) || 0} decimal={0} signed signedEnemy />
+                            <StatComparisonRow label="Max Level Lead" userValue={Number(lastMatchStats.maxLevelLeadLaneOpponent) || 0} enemyValue={Number(enemy.maxLevelLeadLaneOpponent) || 0} decimal={0} signed signedEnemy />
                         </div>
                     </div>
 
@@ -212,8 +214,6 @@ export function DetailedMatchAnalysis({
                                     </>
                                 );
                             })()}
-                            <StatComparisonRow label="Max CS Lead" userValue={Number(lastMatchStats.maxCsAdvantageOnLaneOpponent) || 0} enemyValue={Number(enemy.maxCsAdvantageOnLaneOpponent) || 0} decimal={0} signed signedEnemy />
-                            <StatComparisonRow label="Max Level Lead" userValue={Number(lastMatchStats.maxLevelLeadLaneOpponent) || 0} enemyValue={Number(enemy.maxLevelLeadLaneOpponent) || 0} decimal={0} signed signedEnemy />
                             <StatComparisonRow label="Gold/Min" userValue={lastMatchStats.goldPerMinute || 0} enemyValue={enemy.goldPerMinute || 0} decimal={0} />
                             <StatComparisonRow label="CS/Min" userValue={(lastMatchStats.totalMinionsKilled || 0) / (lastMatchStats.gameDuration / 60 || 1)} enemyValue={(enemy.totalMinionsKilled || 0) / (lastMatchStats.gameDuration / 60 || 1)} decimal={1} />
                             <StatComparisonRow label="Total CS" userValue={lastMatchStats.totalMinionsKilled || 0} enemyValue={enemy.totalMinionsKilled || 0} />
