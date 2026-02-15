@@ -51,6 +51,30 @@ const RANK_COLORS: Record<string, { text: string; border: string; glow: string; 
     "CHALLENGER": { text: "text-[#F4C542]", border: "border-[#F4C542]", glow: "shadow-[#F4C542]/20", bg: "bg-[#F4C542]/10" },
 };
 
+function rankTierToEmblemSrc(tier: string | null | undefined): string | null {
+    if (!tier) return null;
+    const t = tier.toUpperCase();
+    const file = (() => {
+        switch (t) {
+            case "IRON":
+            case "BRONZE":
+            case "SILVER":
+            case "GOLD":
+            case "PLATINUM":
+            case "EMERALD":
+            case "DIAMOND":
+            case "MASTER":
+            case "GRANDMASTER":
+            case "CHALLENGER":
+                return t.toLowerCase();
+            default:
+                return null;
+        }
+    })();
+
+    return file ? `/rank-emblems/${file}.png` : null;
+}
+
 // --- Sub-Components ---
 
 function StatCard({ label, value, icon: Icon, subtext, trend, color }: { label: string; value: string | number; icon?: React.ElementType; subtext?: string; trend?: number; color?: string }) {
@@ -125,6 +149,7 @@ export default function Dashboard() {
     const [progress, setProgress] = useState<AnalyzeProgressUpdate>({ message: "Initializing...", percent: 0 });
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"overview" | "match" | "trends" | "heatmap">("overview");
+    const [rankEmblemErrored, setRankEmblemErrored] = useState(false);
 
     useEffect(() => {
         async function fetchData() {
@@ -141,6 +166,10 @@ export default function Dashboard() {
         }
         if (riotId && region) fetchData();
     }, [riotId, region]);
+
+    useEffect(() => {
+        setRankEmblemErrored(false);
+    }, [data?.ranked_data?.tier]);
 
     // Derived formatting helpers
     const fmt = (val: any, decimals = 1) => typeof val === 'number' ? val.toFixed(decimals) : "0";
@@ -192,7 +221,12 @@ export default function Dashboard() {
 
     const { top_differentiators = [], category_importance = [] } = metrics || {};
     const profileIconUrl = `https://ddragon.leagueoflegends.com/cdn/${ddragon_version}/img/profileicon/${user.profile_icon_id}.png`;
-    const rankConfig = ranked_data?.tier ? RANK_COLORS[ranked_data.tier] : null;
+    const rankTier = typeof ranked_data?.tier === "string" ? ranked_data.tier.toUpperCase() : null;
+    const rankConfig = rankTier ? (RANK_COLORS[rankTier] ?? null) : null;
+    const rankEmblemSrc = rankTierToEmblemSrc(rankTier);
+    const rankText = ranked_data
+        ? [ranked_data.tier, ranked_data.rank].filter(Boolean).join(" ").trim()
+        : "";
 
     const winProbDelta =
         typeof win_probability === "number" && Number.isFinite(win_probability) &&
@@ -250,12 +284,28 @@ export default function Dashboard() {
                                 </div>
                                 {ranked_data ? (
                                     <div className={cn("flex items-center gap-3 px-4 h-12 rounded-2xl border shadow-lg shadow-black/40", rankConfig ? `${rankConfig.bg} ${rankConfig.border} ${rankConfig.glow}` : "bg-white/5 border-white/10")}>
-                                        <Crown className={cn("w-5 h-5", rankConfig?.text)} />
+                                        {rankEmblemSrc && !rankEmblemErrored ? (
+                                            <img
+                                                src={rankEmblemSrc}
+                                                alt={`${ranked_data.tier} rank emblem`}
+                                                className="w-7 h-7 object-contain"
+                                                loading="lazy"
+                                                decoding="async"
+                                                onError={() => setRankEmblemErrored(true)}
+                                            />
+                                        ) : (
+                                            <Crown className={cn("w-5 h-5", rankConfig?.text)} />
+                                        )}
                                         <span className={cn("text-xs font-black uppercase tracking-widest whitespace-nowrap", rankConfig?.text)}>
-                                            {ranked_data.tier} {ranked_data.rank} • {ranked_data.lp} LP
+                                            {rankText} • {ranked_data.lp} LP
                                         </span>
                                     </div>
-                                ) : null}
+                                ) : (
+                                    <div className="flex items-center gap-3 px-4 h-12 rounded-2xl border shadow-lg shadow-black/40 bg-white/5 border-white/10">
+                                        <Medal className="w-5 h-5 text-zinc-500" />
+                                        <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap text-zinc-400">Unranked</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

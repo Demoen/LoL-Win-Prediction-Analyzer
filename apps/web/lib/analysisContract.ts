@@ -58,6 +58,17 @@ export type HeatmapData = {
     ward_events: HeatmapWardEvent[];
 };
 
+export type RankedData = {
+    tier: string;
+    rank: string;
+    lp: number;
+    wins: number;
+    losses: number;
+    hotStreak: boolean;
+    veteran: boolean;
+    freshBlood: boolean;
+};
+
 export type AnalysisResult = {
     status: string;
     user: AnalysisUser;
@@ -74,7 +85,7 @@ export type AnalysisResult = {
     match_timeline_series: unknown;
     performance_trends: unknown[];
     territory_metrics: unknown;
-    ranked_data: unknown;
+    ranked_data: RankedData | null;
     ddragon_version: string;
     heatmap_data: HeatmapData | null;
 };
@@ -83,6 +94,30 @@ const toNum = (v: unknown, fallback: number) => {
     const n = typeof v === 'number' ? v : Number(v);
     return Number.isFinite(n) ? n : fallback;
 };
+
+function toBool(v: unknown, fallback: boolean): boolean {
+    return typeof v === 'boolean' ? v : fallback;
+}
+
+function parseRankedData(raw: unknown): RankedData | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const obj = raw as Record<string, unknown>;
+
+    const tierRaw = typeof obj.tier === 'string' ? obj.tier : '';
+    const tier = tierRaw ? tierRaw.toUpperCase() : '';
+    if (!tier) return null;
+
+    return {
+        tier,
+        rank: typeof obj.rank === 'string' ? obj.rank.toUpperCase() : '',
+        lp: toNum(obj.lp, 0),
+        wins: toNum(obj.wins, 0),
+        losses: toNum(obj.losses, 0),
+        hotStreak: toBool(obj.hotStreak, false),
+        veteran: toBool(obj.veteran, false),
+        freshBlood: toBool(obj.freshBlood, false),
+    };
+}
 
 export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
     const data = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
@@ -111,7 +146,7 @@ export function normalizeAnalysisResult(raw: unknown): AnalysisResult {
         match_timeline_series: data.match_timeline_series ?? {},
         performance_trends: Array.isArray(data.performance_trends) ? data.performance_trends : [],
         territory_metrics: data.territory_metrics ?? {},
-        ranked_data: data.ranked_data ?? null,
+        ranked_data: parseRankedData(data.ranked_data),
         ddragon_version: typeof data.ddragon_version === 'string' ? data.ddragon_version : '14.24.1',
         heatmap_data: (data.heatmap_data && typeof data.heatmap_data === 'object') ? (data.heatmap_data as HeatmapData) : null,
     };
