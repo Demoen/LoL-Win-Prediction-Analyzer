@@ -154,7 +154,11 @@ export default function Dashboard() {
 
     // Derived formatting helpers
     const fmt = (val: any, decimals = 1) => typeof val === 'number' ? val.toFixed(decimals) : "0";
-    const fmtSigned = (val: number | undefined) => val !== undefined ? (val >= 0 ? "+" : "") + val.toFixed(1) : "0";
+    const fmtSigned = (val: unknown) => {
+        const n = typeof val === 'number' ? val : Number(val);
+        if (!Number.isFinite(n)) return "0";
+        return (n >= 0 ? "+" : "") + n.toFixed(1);
+    };
     const fmtPct = (val: any) => typeof val === 'number' ? (val * 100).toFixed(1) + "%" : "0%";
 
 
@@ -395,31 +399,31 @@ export default function Dashboard() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                     <DetailBlock title="Early Game Leads" icon={Zap} color="text-amber-400">
-                                        <StatRow label="Gold/XP @8m" value={fmtSigned(lastMatch.earlyLaningPhaseGoldExpAdvantage)} valueColor={lastMatch.earlyLaningPhaseGoldExpAdvantage > 0 ? "text-green-400" : "text-red-400"} />
-                                        <StatRow label="Gold/XP @14m" value={fmtSigned(lastMatch.laningPhaseGoldExpAdvantage)} valueColor={lastMatch.laningPhaseGoldExpAdvantage > 0 ? "text-green-400" : "text-red-400"} />
-                                        <StatRow label="Max CS Lead" value={fmtSigned(lastMatch.maxCsAdvantageOnLaneOpponent)} valueColor={lastMatch.maxCsAdvantageOnLaneOpponent > 0 ? "text-green-400" : "text-red-400"} />
-                                        <StatRow label="Turret Plates" value={fmt(lastMatch.turretPlatesTaken, 0)} valueColor="text-amber-400" />
+                                        <StatRow label="Gold/XP @8m" value={fmtSigned(avg.earlyLaningPhaseGoldExpAdvantage)} valueColor={(Number(avg.earlyLaningPhaseGoldExpAdvantage) || 0) > 0 ? "text-green-400" : "text-red-400"} />
+                                        <StatRow label="Gold/XP @14m" value={fmtSigned(avg.laningPhaseGoldExpAdvantage)} valueColor={(Number(avg.laningPhaseGoldExpAdvantage) || 0) > 0 ? "text-green-400" : "text-red-400"} />
+                                        <StatRow label="Max CS Lead" value={fmtSigned(avg.maxCsAdvantageOnLaneOpponent)} valueColor={(Number(avg.maxCsAdvantageOnLaneOpponent) || 0) > 0 ? "text-green-400" : "text-red-400"} />
+                                        <StatRow label="Turret Plates" value={fmt(avg.turretPlatesTaken, 0)} valueColor="text-amber-400" />
                                     </DetailBlock>
 
                                     <DetailBlock title="Mechanical Skills" icon={Target} color="text-cyan-400">
-                                        <StatRow label="Hit Rate" value={fmt(lastMatch.skillshotHitRate) + "%"} valueColor="text-cyan-400" />
-                                        <StatRow label="Dodge Rate" value={fmt(lastMatch.skillshotDodgeRate) + "%"} valueColor="text-cyan-400" />
-                                        <StatRow label="Hits" value={`${lastMatch.skillshotsHit || 0} / ${lastMatch.mySkillshotCasts || 0}`} />
-                                        <StatRow label="Dodged" value={`${lastMatch.skillshotsDodged || 0} / ${lastMatch.enemySkillshotCasts || 0}`} />
+                                        <StatRow label="Hit Rate" value={fmt(avg.skillshotHitRate) + "%"} valueColor="text-cyan-400" />
+                                        <StatRow label="Dodge Rate" value={fmt(avg.skillshotDodgeRate) + "%"} valueColor="text-cyan-400" />
+                                        <StatRow label="Avg Hits" value={fmt(avg.skillshotsHit, 0)} />
+                                        <StatRow label="Avg Dodged" value={fmt(avg.skillshotsDodged, 0)} />
                                     </DetailBlock>
 
                                     <DetailBlock title="Vision Habits" icon={Eye} color="text-green-400">
-                                        <StatRow label="Vision Score" value={fmt(lastMatch.visionScore)} valueColor="text-green-400" />
-                                        <StatRow label="Wards Placed" value={fmt(lastMatch.wardsPlaced, 0)} />
-                                        <StatRow label="Control Wards" value={fmt(lastMatch.controlWardsPlaced, 0)} />
-                                        <StatRow label="Enemy Jungle" value={fmtPct(lastMatch.controlWardTimeCoverageInRiverOrEnemyHalf)} valueColor="text-emerald-400" />
+                                        <StatRow label="Vision Score" value={fmt(avg.visionScore)} valueColor="text-green-400" />
+                                        <StatRow label="Wards Placed" value={fmt(avg.wardsPlaced, 0)} />
+                                        <StatRow label="Control Wards" value={fmt(avg.controlWardsPlaced, 0)} />
+                                        <StatRow label="Enemy Jungle" value={fmtPct(avg.controlWardTimeCoverageInRiverOrEnemyHalf)} valueColor="text-emerald-400" />
                                     </DetailBlock>
 
                                     <DetailBlock title="Communication" icon={MessageCircle} color="text-blue-400">
-                                        <StatRow label="Enemy Missing" value={fmt(lastMatch.enemyMissingPings, 0)} />
-                                        <StatRow label="On My Way" value={fmt(lastMatch.onMyWayPings, 0)} />
-                                        <StatRow label="Assist Me" value={fmt(lastMatch.assistMePings, 0)} />
-                                        <StatRow label="Retreat" value={fmt(lastMatch.getBackPings, 0)} />
+                                        <StatRow label="Enemy Missing" value={fmt(avg.enemyMissingPings, 0)} />
+                                        <StatRow label="On My Way" value={fmt(avg.onMyWayPings, 0)} />
+                                        <StatRow label="Assist Me" value={fmt(avg.assistMePings, 0)} />
+                                        <StatRow label="Retreat" value={fmt(avg.getBackPings, 0)} />
                                     </DetailBlock>
                                 </div>
                             </div>

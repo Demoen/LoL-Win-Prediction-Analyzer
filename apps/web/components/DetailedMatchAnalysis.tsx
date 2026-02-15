@@ -11,9 +11,10 @@ interface StatComparisonRowProps {
     unit?: string;
     decimal?: number;
     inverse?: boolean; // If true, lower is better (e.g. deaths)
+    signed?: boolean; // If true, render userValue with +/- sign (useful for lead/delta stats)
 }
 
-const StatComparisonRow = ({ label, userValue, enemyValue, unit = '', decimal = 1, inverse = false }: StatComparisonRowProps) => {
+const StatComparisonRow = ({ label, userValue, enemyValue, unit = '', decimal = 1, inverse = false, signed = false }: StatComparisonRowProps) => {
     let diff = userValue - enemyValue;
     if (inverse) diff = -diff; // Invert logic for negative stats
 
@@ -21,21 +22,23 @@ const StatComparisonRow = ({ label, userValue, enemyValue, unit = '', decimal = 
     const isEven = Math.abs(diff) < 0.05;
     const isWinning = diff > 0;
 
-    const format = (val: number) => {
-        if (typeof val !== 'number') return val;
-        return val % 1 === 0 ? val.toFixed(0) : val.toFixed(decimal);
-    }
+    const format = (val: number, showSign: boolean) => {
+        if (typeof val !== 'number') return val as any;
+        const base = val % 1 === 0 ? val.toFixed(0) : val.toFixed(decimal);
+        if (!showSign) return base;
+        return (val >= 0 ? '+' : '') + base;
+    };
 
     return (
         <div className="flex items-center justify-between py-2 border-b border-white/5 last:border-0 hover:bg-white/5 px-2 -mx-2 rounded transition-colors">
             <span className="text-xs font-bold text-slate-400">{label}</span>
             <div className="flex items-center gap-3">
                 <div className={`text-xs font-mono font-bold ${isWinning ? 'text-green-400' : isEven ? 'text-slate-400' : 'text-slate-500'}`}>
-                    {format(userValue)}{unit}
+                    {format(userValue, signed)}{unit}
                 </div>
                 <div className="text-[10px] text-slate-600 font-mono">vs</div>
                 <div className={`text-xs font-mono font-bold ${!isWinning && !isEven ? 'text-red-400' : 'text-[#5842F4]/70'}`}>
-                    {format(enemyValue)}{unit}
+                    {format(enemyValue, false)}{unit}
                 </div>
             </div>
         </div>
@@ -184,6 +187,9 @@ export function DetailedMatchAnalysis({
                             <h3 className="font-bold text-white text-sm uppercase tracking-wider">Economy</h3>
                         </div>
                         <div className="space-y-1">
+                            <StatComparisonRow label="Gold+XP Lead @8m" userValue={Number(lastMatchStats.earlyLaningPhaseGoldExpAdvantage) || 0} enemyValue={0} decimal={0} signed />
+                            <StatComparisonRow label="Gold+XP Lead @14m" userValue={Number(lastMatchStats.laningPhaseGoldExpAdvantage) || 0} enemyValue={0} decimal={0} signed />
+                            <StatComparisonRow label="Max CS Lead" userValue={Number(lastMatchStats.maxCsAdvantageOnLaneOpponent) || 0} enemyValue={0} decimal={0} signed />
                             <StatComparisonRow label="Gold/Min" userValue={lastMatchStats.goldPerMinute || 0} enemyValue={enemy.goldPerMinute || 0} decimal={0} />
                             <StatComparisonRow label="CS/Min" userValue={(lastMatchStats.totalMinionsKilled || 0) / (lastMatchStats.gameDuration / 60 || 1)} enemyValue={(enemy.totalMinionsKilled || 0) / (lastMatchStats.gameDuration / 60 || 1)} decimal={1} />
                             <StatComparisonRow label="Total CS" userValue={lastMatchStats.totalMinionsKilled || 0} enemyValue={enemy.totalMinionsKilled || 0} />
