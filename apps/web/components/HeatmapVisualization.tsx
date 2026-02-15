@@ -5,7 +5,23 @@ import { Map as MapIcon, Skull, Eye, Coins, Users, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { HeatmapData } from "@/lib/analysisContract";
 
-const MAP_COORD_MAX = 15000;
+// Riot timeline coordinates are world-space units and do not start at 0.
+// These bounds are the commonly used Summoner's Rift (mapId 11) world extents.
+// Using explicit min/max prevents subtle stretching/offset compared to `0..15000`.
+const SR_BOUNDS = {
+    minX: -120,
+    maxX: 14870,
+    minY: -120,
+    maxY: 14980,
+} as const;
+
+const LEGACY_BOUNDS = {
+    minX: 0,
+    maxX: 15000,
+    minY: 0,
+    maxY: 15000,
+} as const;
+
 const GRID_SIZE = 192; // Higher res for smoother heat
 
 interface HeatmapVisualizationProps {
@@ -123,7 +139,47 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
     const [selectedParticipant, setSelectedParticipant] = useState<number | null>(null);
     const [layers, setLayers] = useState({ positions: true, kills: true, wards: true, goldZones: false });
 
-    const clampMap = (v: number) => Math.max(0, Math.min(MAP_COORD_MAX, v));
+    const bounds = useMemo(() => {
+        // Some pipelines normalize to 0..15000, while raw Riot timeline coords can be slightly negative.
+        // Detect based on observed ranges to avoid stretching/offset.
+        if (!heatmapData) return SR_BOUNDS;
+
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        const consider = (x: number, y: number) => {
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
+        };
+
+        for (const p of heatmapData.participants ?? []) {
+            for (const pos of p.positions ?? []) consider(pos.x, pos.y);
+        }
+        for (const k of heatmapData.kill_events ?? []) consider(k.x, k.y);
+        for (const w of heatmapData.ward_events ?? []) consider(w.x, w.y);
+
+        // If everything fits comfortably into 0..15000, prefer legacy bounds.
+        if (
+            Number.isFinite(minX) && Number.isFinite(minY) && Number.isFinite(maxX) && Number.isFinite(maxY) &&
+            minX >= 0 && minY >= 0 &&
+            maxX <= LEGACY_BOUNDS.maxX && maxY <= LEGACY_BOUNDS.maxY
+        ) {
+            return LEGACY_BOUNDS;
+        }
+
+        return SR_BOUNDS;
+    }, [heatmapData]);
+
+    const mapW = bounds.maxX - bounds.minX;
+    const mapH = bounds.maxY - bounds.minY;
+
+    const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+    const clampX = (x: number) => clamp(x, bounds.minX, bounds.maxX);
+    const clampY = (y: number) => clamp(y, bounds.minY, bounds.maxY);
+
+    const normX = (x: number) => (clampX(x) - bounds.minX) / mapW;
+    const normY = (y: number) => (clampY(y) - bounds.minY) / mapH;
 
     // Load map image
     useEffect(() => {
@@ -158,8 +214,9 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
             : heatmapData.participants;
         for (const p of parts) {
             for (const pos of p.positions) {
-                const gx = Math.floor((clampMap(pos.x) / MAP_COORD_MAX) * (GRID_SIZE - 1));
-                const gy = Math.floor(((MAP_COORD_MAX - clampMap(pos.y)) / MAP_COORD_MAX) * (GRID_SIZE - 1));
+                const gx = Math.floor(normX(pos.x) * (GRID_SIZE - 1));
+                // Canvas/map images have origin at top-left, so invert Y.
+                const gy = Math.floor((1 - normY(pos.y)) * (GRID_SIZE - 1));
                 if (gx >= 0 && gx < GRID_SIZE && gy >= 0 && gy < GRID_SIZE) grid[gy * GRID_SIZE + gx] += 1;
             }
         }
@@ -168,7 +225,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
         for (let i = 0; i < grid.length; i++) if (grid[i] > max) max = grid[i];
         if (max > 0) for (let i = 0; i < grid.length; i++) grid[i] = Math.sqrt(grid[i] / max); // sqrt compression
         return grid;
-    }, [heatmapData, selectedParticipant]);
+    }, [heatmapData, selectedParticipant, bounds]);
 
     const goldGrid = useMemo(() => {
         if (!heatmapData) return null;
@@ -179,8 +236,8 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
         for (const p of parts) {
             for (const pos of p.positions) {
                 if (pos.goldDelta <= 0) continue;
-                const gx = Math.floor((clampMap(pos.x) / MAP_COORD_MAX) * (GRID_SIZE - 1));
-                const gy = Math.floor(((MAP_COORD_MAX - clampMap(pos.y)) / MAP_COORD_MAX) * (GRID_SIZE - 1));
+                const gx = Math.floor(normX(pos.x) * (GRID_SIZE - 1));
+                const gy = Math.floor((1 - normY(pos.y)) * (GRID_SIZE - 1));
                 if (gx >= 0 && gx < GRID_SIZE && gy >= 0 && gy < GRID_SIZE)
                     grid[gy * GRID_SIZE + gx] += Math.log1p(pos.goldDelta);
             }
@@ -190,7 +247,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
         for (let i = 0; i < grid.length; i++) if (grid[i] > max) max = grid[i];
         if (max > 0) for (let i = 0; i < grid.length; i++) grid[i] = Math.sqrt(grid[i] / max);
         return grid;
-    }, [heatmapData, selectedParticipant]);
+    }, [heatmapData, selectedParticipant, bounds]);
 
     // ── Draw ──
     const draw = useCallback(() => {
@@ -226,8 +283,8 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
         ctx.fillRect(0, 0, W, H);
 
         const toCanvas = (mx: number, my: number) => ({
-            x: (clampMap(mx) / MAP_COORD_MAX) * W,
-            y: ((MAP_COORD_MAX - clampMap(my)) / MAP_COORD_MAX) * H,
+            x: normX(mx) * W,
+            y: (1 - normY(my)) * H,
         });
 
         // Scale factor for markers based on canvas size
@@ -355,7 +412,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
         ctx.fillStyle = vg;
         ctx.fillRect(0, 0, W, H);
 
-    }, [mapLoaded, heatmapData, selectedParticipant, layers, positionGrid, goldGrid, participantMap]);
+    }, [mapLoaded, heatmapData, selectedParticipant, layers, positionGrid, goldGrid, participantMap, bounds]);
 
     useEffect(() => { draw(); }, [draw]);
 
