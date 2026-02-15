@@ -21,7 +21,7 @@ export function LogoGlb({ className }: { className?: string }) {
             const scene = new THREE.Scene();
 
             const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
-            camera.position.set(0, 0, 1.55);
+            camera.position.set(0, 0, 2.0);
 
             const renderer = new THREE.WebGLRenderer({
                 canvas,
@@ -46,8 +46,21 @@ export function LogoGlb({ className }: { className?: string }) {
             }
 
             const model = gltf.scene;
+
+            // Center + fit to view to avoid clipping regardless of GLB's original scale/origin.
+            const box = new THREE.Box3().setFromObject(model);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+
+            model.position.x += -center.x;
+            model.position.y += -center.y;
+            model.position.z += -center.z;
+
+            const maxDim = Math.max(size.x, size.y, size.z) || 1;
+            const fitScale = 1.15 / maxDim;
+            model.scale.setScalar(fitScale);
+
             model.rotation.set(0.15, 0.6, 0);
-            model.scale.setScalar(1.8);
             scene.add(model);
 
             const resize = () => {
