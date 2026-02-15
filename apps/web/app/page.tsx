@@ -124,11 +124,11 @@ export default function Home() {
           {/* Quick Links */}
           <div className="flex items-center justify-center gap-3 text-xs">
             <span className="text-slate-600 uppercase tracking-wider">Try:</span>
-            <button onClick={() => { setRiotId("Agurin#EUW"); setRegion("euw"); }} className="text-slate-500 hover:text-[#00D1FF] transition-colors font-medium">Agurin#EUW</button>
+            <button onClick={() => { setRiotId("Zeniv#heart"); setRegion("euw"); }} className="text-slate-500 hover:text-[#00D1FF] transition-colors font-medium">Zeniv#heart</button>
             <span className="text-slate-700">•</span>
-            <button onClick={() => { setRiotId("Caps#EUW"); setRegion("euw"); }} className="text-slate-500 hover:text-[#00D1FF] transition-colors font-medium">Caps#EUW</button>
+            <button onClick={() => { setRiotId("Sasaki#sit"); setRegion("euw"); }} className="text-slate-500 hover:text-[#00D1FF] transition-colors font-medium">Sasaki#sit</button>
             <span className="text-slate-700">•</span>
-            <button onClick={() => { setRiotId("Faker#KR1"); setRegion("kr"); }} className="text-slate-500 hover:text-[#00D1FF] transition-colors font-medium">Faker#KR1</button>
+            <button onClick={() => { setRiotId("momo#owo7"); setRegion("euw"); }} className="text-slate-500 hover:text-[#00D1FF] transition-colors font-medium">momo#owo7</button>
           </div>
         </div>
 
