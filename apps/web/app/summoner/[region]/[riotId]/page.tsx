@@ -283,26 +283,26 @@ export default function Dashboard() {
                                     </div>
                                 </div>
                                 {ranked_data ? (
-                                    <div className={cn("flex items-center gap-3 px-4 h-12 rounded-2xl border shadow-lg shadow-black/40", rankConfig ? `${rankConfig.bg} ${rankConfig.border} ${rankConfig.glow}` : "bg-white/5 border-white/10")}>
+                                    <div className={cn("flex items-center gap-3 px-4 h-12 rounded-2xl shadow-lg shadow-black/40", rankConfig ? `${rankConfig.bg} ${rankConfig.glow}` : "bg-white/5")}>
                                         {rankEmblemSrc && !rankEmblemErrored ? (
                                             <img
                                                 src={rankEmblemSrc}
                                                 alt={`${ranked_data.tier} rank emblem`}
-                                                className="w-7 h-7 object-contain"
+                                                className="w-8 h-8 object-contain"
                                                 loading="lazy"
                                                 decoding="async"
                                                 onError={() => setRankEmblemErrored(true)}
                                             />
                                         ) : (
-                                            <Crown className={cn("w-5 h-5", rankConfig?.text)} />
+                                            <Crown className={cn("w-6 h-6", rankConfig?.text)} />
                                         )}
                                         <span className={cn("text-xs font-black uppercase tracking-widest whitespace-nowrap", rankConfig?.text)}>
                                             {rankText} • {ranked_data.lp} LP
                                         </span>
                                     </div>
                                 ) : (
-                                    <div className="flex items-center gap-3 px-4 h-12 rounded-2xl border shadow-lg shadow-black/40 bg-white/5 border-white/10">
-                                        <Medal className="w-5 h-5 text-zinc-500" />
+                                    <div className="flex items-center gap-3 px-4 h-12 rounded-2xl shadow-lg shadow-black/40 bg-white/5">
+                                        <Medal className="w-6 h-6 text-zinc-500" />
                                         <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap text-zinc-400">Unranked</span>
                                     </div>
                                 )}
