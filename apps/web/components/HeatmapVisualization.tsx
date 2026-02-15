@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { Map, Skull, Eye, Coins, Users, Flame } from "lucide-react";
+import { Map as MapIcon, Skull, Eye, Coins, Users, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { HeatmapData } from "@/lib/analysisContract";
 
@@ -289,8 +289,19 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                     const lx = x - labelW / 2;
                     const ly = y + r + 3;
                     ctx.fillStyle = "rgba(0,0,0,0.7)";
+                    const rr = 3;
+                    const lh = fontSize + 4;
                     ctx.beginPath();
-                    ctx.roundRect(lx, ly, labelW, fontSize + 4, 3);
+                    ctx.moveTo(lx + rr, ly);
+                    ctx.lineTo(lx + labelW - rr, ly);
+                    ctx.arcTo(lx + labelW, ly, lx + labelW, ly + rr, rr);
+                    ctx.lineTo(lx + labelW, ly + lh - rr);
+                    ctx.arcTo(lx + labelW, ly + lh, lx + labelW - rr, ly + lh, rr);
+                    ctx.lineTo(lx + rr, ly + lh);
+                    ctx.arcTo(lx, ly + lh, lx, ly + lh - rr, rr);
+                    ctx.lineTo(lx, ly + rr);
+                    ctx.arcTo(lx, ly, lx + rr, ly, rr);
+                    ctx.closePath();
                     ctx.fill();
                     ctx.fillStyle = isKill ? "#86efac" : "#fca5a5";
                     ctx.textAlign = "center";
@@ -365,7 +376,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
         return (
             <div className="glass rounded-3xl border border-white/5 flex items-center justify-center h-[500px]">
                 <div className="text-center">
-                    <Map className="w-12 h-12 mx-auto mb-3 text-zinc-600" />
+                    <MapIcon className="w-12 h-12 mx-auto mb-3 text-zinc-600" />
                     <p className="text-sm text-zinc-500">No heatmap data available for the last match.</p>
                 </div>
             </div>
@@ -380,7 +391,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
         <div className="space-y-6">
             {/* Header */}
             <div className="flex items-center gap-3">
-                <Map className="w-6 h-6 text-[#00D1FF]" />
+                <MapIcon className="w-6 h-6 text-[#00D1FF]" />
                 <h2 className="text-xl font-black uppercase italic tracking-tighter">Match Heatmap</h2>
                 <span className="px-3 py-1 bg-[#00D1FF]/10 text-[#00D1FF] rounded text-[10px] font-bold uppercase tracking-widest">Last Match</span>
             </div>
