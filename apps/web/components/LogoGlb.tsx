@@ -21,7 +21,7 @@ export function LogoGlb({ className }: { className?: string }) {
             const scene = new THREE.Scene();
 
             const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
-            camera.position.set(0, 0, 2.2);
+            camera.position.set(0, 0, 1.55);
 
             const renderer = new THREE.WebGLRenderer({
                 canvas,
@@ -47,7 +47,7 @@ export function LogoGlb({ className }: { className?: string }) {
 
             const model = gltf.scene;
             model.rotation.set(0.15, 0.6, 0);
-            model.scale.setScalar(1.2);
+            model.scale.setScalar(1.8);
             scene.add(model);
 
             const resize = () => {

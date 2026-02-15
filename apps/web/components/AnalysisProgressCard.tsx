@@ -63,10 +63,9 @@ export function AnalysisProgressCard({ progress }: { progress: AnalyzeProgressUp
         <div className="min-h-screen bg-[#05050f] text-white flex items-center justify-center relative overflow-hidden font-sans">
             <div className="fixed inset-0 z-0 opacity-40 pointer-events-none bg-mesh" />
             <div className="z-10 flex flex-col items-center gap-8 w-full max-w-md p-8 glass rounded-3xl border border-white/5">
-                <div className="relative w-24 h-24">
-                    <div className="absolute inset-0 bg-[#5842F4]/15 rounded-full blur-xl" />
+                <div className="relative w-32 h-32">
                     <div className="absolute inset-0 flex items-center justify-center">
-                        <LogoGlb className="w-16 h-16 opacity-95" />
+                        <LogoGlb className="w-28 h-28" />
                     </div>
                 </div>
 
