@@ -377,17 +377,27 @@ def extract_heatmap_data(
                         })
 
                     elif event_type == 'WARD_PLACED':
+                        creator_id = _get_attr_or_key(event, 'creatorId', 0)
+                        # Ward events don't have position — use the creator's
+                        # position from this frame's participantFrames instead
+                        wx, wy = 0, 0
                         pos = _get_attr_or_key(event, 'position', {})
-                        if not pos:
-                            continue
-                        wx = _get_attr_or_key(pos, 'x', 0)
-                        wy = _get_attr_or_key(pos, 'y', 0)
+                        if pos:
+                            wx = _get_attr_or_key(pos, 'x', 0)
+                            wy = _get_attr_or_key(pos, 'y', 0)
+                        if (wx == 0 and wy == 0) and creator_id and participant_frames:
+                            creator_data = _get_attr_or_key(participant_frames, str(creator_id))
+                            if creator_data:
+                                creator_pos = _get_attr_or_key(creator_data, 'position', {})
+                                if creator_pos:
+                                    wx = _get_attr_or_key(creator_pos, 'x', 0)
+                                    wy = _get_attr_or_key(creator_pos, 'y', 0)
                         if wx == 0 and wy == 0:
                             continue
                         ward_events.append({
                             'x': wx, 'y': wy,
                             'wardType': _get_attr_or_key(event, 'wardType', 'UNDEFINED'),
-                            'creatorId': _get_attr_or_key(event, 'creatorId', 0),
+                            'creatorId': creator_id,
                             'timestamp': _get_attr_or_key(event, 'timestamp', timestamp),
                         })
 
