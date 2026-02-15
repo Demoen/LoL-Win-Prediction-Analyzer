@@ -15,6 +15,7 @@
     "next": "16.1.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "three": "^0.164.1",
     "recharts": "^3.7.0",
     "reclsx": "^1.1.0",
     "tailwind-merge": "^3.4.0"

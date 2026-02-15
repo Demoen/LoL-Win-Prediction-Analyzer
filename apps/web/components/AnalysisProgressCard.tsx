@@ -1,8 +1,9 @@
 "use client";
 
-import { Activity, CheckCircle2, Circle, Loader2 } from "lucide-react";
+import { CheckCircle2, Circle, Loader2 } from "lucide-react";
 import type { AnalyzeProgressUpdate } from "@/lib/analysisContract";
 import { cn } from "@/lib/utils";
+import { LogoGlb } from "@/components/LogoGlb";
 
 type StageDef = {
     id: string;
@@ -70,7 +71,7 @@ export function AnalysisProgressCard({ progress }: { progress: AnalyzeProgressUp
                         style={{ animationDirection: "reverse", animationDuration: "2s" }}
                     />
                     <div className="absolute inset-0 flex items-center justify-center">
-                        <Activity className="w-8 h-8 text-white/50" />
+                        <LogoGlb className="w-10 h-10 opacity-90" />
                     </div>
                 </div>
 
