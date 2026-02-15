@@ -8,10 +8,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Semaphore to limit concurrent Riot API calls (rate limiting protection)
-# Riot API has rate limits, so we cap concurrent requests
-API_SEMAPHORE = asyncio.Semaphore(5)
-
 class IngestionService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -135,29 +131,25 @@ class IngestionService:
             yield {"current": total, "total": total, "status": "All matches already cached"}
             return
         
-        # Fetch match data in parallel (API calls only - no DB operations)
+        # Fetch match data in parallel; RiotService enforces a shared concurrency limit.
         async def fetch_match_data(match_id: str):
-            """Fetch match details with rate limiting (API only, no DB)"""
-            async with API_SEMAPHORE:
-                try:
-                    details = await riot_service.get_match_details(routing, match_id)
-                    return (match_id, details, None)
-                except Exception as e:
-                    logger.error(f"Failed to fetch match {match_id}: {e}")
-                    return (match_id, None, str(e))
-        
-        # Create tasks for parallel API fetching
-        tasks = [fetch_match_data(mid) for mid in new_match_ids]
-        
-        # Gather all API results first (parallel)
+            """Fetch match details (API only, no DB)."""
+            try:
+                details = await riot_service.get_match_details(routing, match_id)
+                return (match_id, details, None)
+            except Exception as e:
+                logger.error(f"Failed to fetch match {match_id}: {e}")
+                return (match_id, None, str(e))
+
+        tasks = [asyncio.create_task(fetch_match_data(mid)) for mid in new_match_ids]
+
         yield {"current": cached_count, "total": total, "status": f"Fetching {len(new_match_ids)} matches from Riot API..."}
-        results = await asyncio.gather(*tasks)
-        
-        # Save to DB sequentially (avoids session conflicts)
+
         completed = cached_count
-        for match_id, details, error in results:
+        for task in asyncio.as_completed(tasks):
+            match_id, details, error = await task
             completed += 1
-            
+
             if details:
                 try:
                     await self.save_match(details)
@@ -167,7 +159,7 @@ class IngestionService:
                     status = f"Failed to save {match_id}"
             else:
                 status = f"Failed to fetch {match_id}: {error}"
-            
+
             yield {"current": completed, "total": total, "status": status}
 
     def _get_routing(self, region: str) -> str:

@@ -3,18 +3,20 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { analyzeStats } from "@/lib/api";
+import type { AnalyzeProgressUpdate } from "@/lib/analysisContract";
 import {
     ArrowLeft, Trophy, Skull, Crown, Flame, HeartCrack, Umbrella,
     Baby, UserX, Swords, Castle, Wheat, Eye, EyeOff, Coins, Shield, Target,
     Sword, Banknote, HelpCircle, HeartHandshake, Ghost, Users, MoveHorizontal,
     TrendingDown, Frown, Sparkles, Hand, HeartPulse, Bot, Gamepad2,
-    ChartLine, Crosshair, Trees, Activity, MessageCircle, BarChart3,
-    Zap, Heart, Timer, Layers, Map, Compass, TrendingUp, CheckCircle2, Circle, Loader2,
+    ChartLine, Crosshair, Trees, MessageCircle, BarChart3,
+    Zap, Heart, Timer, Layers, Map, Compass, TrendingUp,
     Search, Menu, Settings, Bell, ChevronRight, Share2, Download,
     Medal
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { AnalysisProgressCard } from "@/components/AnalysisProgressCard";
 
 // --- Types & Constants ---
 
@@ -48,18 +50,6 @@ const RANK_COLORS: Record<string, { text: string; border: string; glow: string; 
     "GRANDMASTER": { text: "text-[#DC143C]", border: "border-[#DC143C]", glow: "shadow-[#DC143C]/20", bg: "bg-[#DC143C]/10" },
     "CHALLENGER": { text: "text-[#F4C542]", border: "border-[#F4C542]", glow: "shadow-[#F4C542]/20", bg: "bg-[#F4C542]/10" },
 };
-
-const LOADING_STAGES = [
-    { id: 1, label: "Finding Account", minPercent: 0 },
-    { id: 2, label: "Fetching Ranked Info", minPercent: 8 },
-    { id: 3, label: "Loading Match History", minPercent: 10 },
-    { id: 4, label: "Training AI Model", minPercent: 72 },
-    { id: 5, label: "Analyzing Performance", minPercent: 78 },
-    { id: 6, label: "Analyzing Territorial Control", minPercent: 83 },
-    { id: 7, label: "Calculating Win Probability", minPercent: 88 },
-    { id: 8, label: "Fetching Timeline Data", minPercent: 95 },
-    { id: 9, label: "Finalizing Results", minPercent: 98 },
-];
 
 // --- Sub-Components ---
 
@@ -132,7 +122,7 @@ export default function Dashboard() {
 
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [progress, setProgress] = useState({ message: "Initializing...", percent: 0 });
+    const [progress, setProgress] = useState<AnalyzeProgressUpdate>({ message: "Initializing...", percent: 0 });
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"overview" | "match" | "trends" | "heatmap">("overview");
 
@@ -164,47 +154,7 @@ export default function Dashboard() {
 
     // Loading Screen
     if (loading) {
-        const currentStageIndex = LOADING_STAGES.findIndex((stage, idx) => {
-            const nextStage = LOADING_STAGES[idx + 1];
-            return progress.percent >= stage.minPercent && (!nextStage || progress.percent < nextStage.minPercent);
-        });
-        return (
-            <div className="min-h-screen bg-[#05050f] text-white flex items-center justify-center relative overflow-hidden font-sans">
-                <div className="fixed inset-0 z-0 opacity-40 pointer-events-none bg-mesh"></div>
-                <div className="z-10 flex flex-col items-center gap-8 w-full max-w-md p-8 glass rounded-3xl border border-white/5">
-                    <div className="relative w-24 h-24">
-                        <div className="absolute inset-0 bg-[#5842F4]/20 rounded-full blur-xl animate-pulse" />
-                        <div className="absolute inset-0 border-4 border-[#5842F4]/20 border-t-[#5842F4] rounded-full animate-spin" />
-                        <div className="absolute inset-3 border-4 border-[#00D1FF]/20 border-b-[#00D1FF] rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '2s' }} />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <Activity className="w-8 h-8 text-white/50" />
-                        </div>
-                    </div>
-                    <div className="w-full text-center space-y-2">
-                        <h2 className="text-xl font-black uppercase italic tracking-tighter">{progress.message}</h2>
-                        <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-[#5842F4] to-[#00D1FF] transition-all duration-300" style={{ width: `${progress.percent}%` }} />
-                        </div>
-                        <div className="flex justify-between text-xs text-zinc-500 font-bold uppercase tracking-widest mt-2">
-                            <span>System Limit</span>
-                            <span>{progress.percent}%</span>
-                        </div>
-                    </div>
-                    <div className="w-full space-y-2">
-                        {LOADING_STAGES.map((stage, idx) => {
-                            const isCompleted = idx < currentStageIndex;
-                            const isCurrent = idx === currentStageIndex;
-                            return (
-                                <div key={stage.id} className={cn("flex items-center gap-3 text-xs font-bold uppercase tracking-widest transition-all", isCurrent ? "text-white scale-105 pl-2" : isCompleted ? "text-[#5842F4]" : "text-zinc-700")}>
-                                    {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : isCurrent ? <Loader2 className="w-4 h-4 animate-spin" /> : <Circle className="w-4 h-4" />}
-                                    {stage.label}
-                                </div>
-                            )
-                        })}
-                    </div>
-                </div>
-            </div>
-        );
+        return <AnalysisProgressCard progress={progress} />;
     }
 
     // Error State

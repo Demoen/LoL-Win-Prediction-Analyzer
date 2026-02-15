@@ -209,6 +209,16 @@ class AnalyzeRequest(BaseModel):
     riot_id: str
     region: str
 
+
+def _clamp_percent(p: object) -> int:
+    try:
+        n = float(p)  # type: ignore[arg-type]
+    except Exception:
+        return 0
+    if not math.isfinite(n):
+        return 0
+    return int(max(0, min(100, round(n))))
+
 @router.post("/analyze")
 async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     # 1. Parse Riot ID
@@ -219,7 +229,20 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
 
     async def analysis_generator():
         try:
-            yield json.dumps({"type": "progress", "message": "Finding user account...", "percent": 5}) + "\n"
+            async def _progress(stage: str, message: str, percent: object):
+                payload = {
+                    "type": "progress",
+                    "stage": stage,
+                    "message": message,
+                    "percent": _clamp_percent(percent),
+                }
+                try:
+                    payload["limits"] = await riot_service.get_limits()
+                except Exception:
+                    pass
+                return json.dumps(payload) + "\n"
+
+            yield await _progress("FIND_ACCOUNT", "Finding user account...", 5)
 
             ddragon_version = await get_ddragon_version()
             
@@ -233,7 +256,7 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
                     return
 
                 # Fetch ranked data
-                yield json.dumps({"type": "progress", "message": "Fetching ranked info...", "percent": 8}) + "\n"
+                yield await _progress("FETCH_RANKED", "Fetching ranked info...", 8)
                 # Ensure region has proper format (e.g., euw1 not euw)
                 league_region = request.region
                 # Simple mapping for common regions that need '1' appended
@@ -264,8 +287,11 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
                 async for progress in ingestion.ingest_match_history_generator(user, count=20):
                     current = progress["current"]
                     total = progress["total"]
-                    percent = 10 + int((current / total) * 60) # Map 0-100% of matches to 10-70% total progress
-                    yield json.dumps({"type": "progress", "message": progress["status"], "percent": percent}) + "\n"
+                    if total and total > 0:
+                        percent = 10 + int((current / total) * 60)  # Map 0-100% of matches to 10-70% total progress
+                    else:
+                        percent = 10
+                    yield await _progress("MATCH_HISTORY", progress["status"], percent)
                     match_count = total
 
             except Exception as e:
@@ -274,12 +300,12 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
                 yield json.dumps({"type": "error", "message": str(e)}) + "\n"
                 return
 
-            yield json.dumps({"type": "progress", "message": "Loading match data...", "percent": 72}) + "\n"
+            yield await _progress("LOAD_MATCH_DATA", "Loading match data...", 72)
             
             # 3. Load Data & Train
             df = await load_player_data(db, user.puuid)
             
-            yield json.dumps({"type": "progress", "message": "Training AI model...", "percent": 75}) + "\n"
+            yield await _progress("TRAIN_MODEL", "Training AI model...", 75)
             metrics = model_instance.train(df)
             
             if "error" in metrics:
@@ -302,7 +328,7 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
                 yield json.dumps({"type": "result", "data": partial_data}) + "\n"
                 return
             
-            yield json.dumps({"type": "progress", "message": "Calculating performance metrics...", "percent": 78}) + "\n"
+            yield await _progress("PERFORMANCE_METRICS", "Calculating performance metrics...", 78)
 
             # 4. Calculate weighted averages
             weighted_averages = model_instance.calculate_weighted_averages(df)
@@ -314,7 +340,7 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
                 if lane_lead_limit <= 0:
                     lane_lead_limit = LANE_LEAD_MATCH_LIMIT_MAX
 
-                yield json.dumps({"type": "progress", "message": f"Computing lane leads @14m (last {lane_lead_limit} matches)...", "percent": 79}) + "\n"
+                yield await _progress("LANE_LEADS", f"Computing lane leads @14m (last {lane_lead_limit} matches)...", 79)
                 lane_leads = await _compute_recent_lane_leads_at_minute(
                     db,
                     user.puuid,
@@ -353,7 +379,7 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
                 except Exception as e:
                      print(f"Error fetching last match obj: {e}")
 
-            yield json.dumps({"type": "progress", "message": "Analyzing player mood...", "percent": 80}) + "\n"
+            yield await _progress("MOOD", "Analyzing player mood...", 80)
             
             # 6. Analyze player mood
             player_moods = model_instance.analyze_player_mood(df)
@@ -361,18 +387,18 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
             # 7. Calculate win rate
             win_rate = float(df['win'].mean() * 100) if not df.empty else 50.0
             
-            yield json.dumps({"type": "progress", "message": "Analyzing territorial control...", "percent": 83}) + "\n"
+            yield await _progress("TERRITORIAL", "Analyzing territorial control...", 83)
             
             # 9. Analyze territorial control
             territory_metrics = await analyze_territory_for_player(db, user.puuid, request.region)
 
-            yield json.dumps({"type": "progress", "message": "Calculating win probability...", "percent": 88}) + "\n"
+            yield await _progress("WIN_PROB", "Calculating win probability...", 88)
 
             # 10. Win Prediction & Drivers
             raw_model_prediction = model_instance.predict_win_probability(last_match_stats)
             win_probability = (win_rate * 0.7) + (raw_model_prediction * 0.3)
             
-            yield json.dumps({"type": "progress", "message": "Comparing with opponent...", "percent": 90}) + "\n"
+            yield await _progress("OPPONENT_COMPARE", "Comparing with opponent...", 90)
             
             # --- Extract Enemy Laner Stats for Comparison ---
             enemy_stats = {}
@@ -455,12 +481,12 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
                 except Exception as e:
                     print(f"Error extracting enemy stats: {e}")
 
-            yield json.dumps({"type": "progress", "message": "Analyzing win factors...", "percent": 92}) + "\n"
+            yield await _progress("WIN_FACTORS", "Analyzing win factors...", 92)
 
             win_drivers = model_instance.get_win_driver_insights(df, last_match_stats, enemy_stats)
             skill_focus = model_instance.get_skill_focus(df, last_match_stats, enemy_stats)
 
-            yield json.dumps({"type": "progress", "message": "Fetching match timeline...", "percent": 95}) + "\n"
+            yield await _progress("FETCH_TIMELINE", "Fetching match timeline...", 95)
 
             # 11. Timeline Series (Gold/XP Difference) + Heatmap Data
             match_timeline_series = {}
@@ -529,7 +555,7 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
                  except Exception as e:
                     print(f"Error fetching timeline series: {e}")
 
-            yield json.dumps({"type": "progress", "message": "Preparing results...", "percent": 98}) + "\n"
+            yield await _progress("PREPARE_RESULTS", "Preparing results...", 98)
 
             # 12. Performance Trends (Last 50 games)
             # We already have `df` which contains the last 50 games (limit=50 in load_player_data)

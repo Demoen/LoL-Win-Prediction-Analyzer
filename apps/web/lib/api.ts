@@ -1,19 +1,58 @@
-import type { AnalyzeProgressUpdate, AnalysisResult } from "./analysisContract";
+import type { AnalyzeProgressUpdate, AnalysisResult, RiotApiLimits } from "./analysisContract";
 import { normalizeAnalysisResult } from "./analysisContract";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
 type AnalyzeStreamEvent =
-    | { type: "progress"; message: string; percent: number }
+    | { type: "progress"; message: string; percent: number; stage?: string; limits?: RiotApiLimits }
     | { type: "result"; data: unknown }
     | { type: "error"; message: string };
+
+function clampPercent(value: unknown): number {
+    const n = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function parseLimits(limits: unknown): RiotApiLimits | undefined {
+    if (!limits || typeof limits !== 'object') return undefined;
+    const obj = limits as Record<string, unknown>;
+    const maxConcurrent = typeof obj.maxConcurrent === 'number' ? obj.maxConcurrent : Number(obj.maxConcurrent);
+    const inFlight = typeof obj.inFlight === 'number' ? obj.inFlight : Number(obj.inFlight);
+    const queued = typeof obj.queued === 'number' ? obj.queued : Number(obj.queued);
+
+    if (!Number.isFinite(maxConcurrent) || !Number.isFinite(inFlight) || !Number.isFinite(queued)) return undefined;
+    return {
+        maxConcurrent: Math.max(1, Math.floor(maxConcurrent)),
+        inFlight: Math.max(0, Math.floor(inFlight)),
+        queued: Math.max(0, Math.floor(queued)),
+    };
+}
 
 function parseAnalyzeEvent(line: string): AnalyzeStreamEvent | undefined {
     try {
         const event = JSON.parse(line);
         if (!event || typeof event !== 'object') return undefined;
         if (typeof event.type !== 'string') return undefined;
-        return event as AnalyzeStreamEvent;
+
+        if (event.type === 'progress') {
+            if (typeof event.message !== 'string') return undefined;
+            const percent = clampPercent(event.percent);
+            const stage = typeof event.stage === 'string' ? event.stage : undefined;
+            const limits = parseLimits(event.limits);
+            return { type: 'progress', message: event.message, percent, stage, limits };
+        }
+
+        if (event.type === 'error') {
+            if (typeof event.message !== 'string') return undefined;
+            return { type: 'error', message: event.message };
+        }
+
+        if (event.type === 'result') {
+            return { type: 'result', data: event.data };
+        }
+
+        return undefined;
     } catch {
         return undefined;
     }
@@ -65,7 +104,7 @@ export async function analyzeStats(
                 if (!event) continue;
 
                 if (event.type === "progress" && onProgress) {
-                    onProgress({ message: event.message, percent: event.percent });
+                    onProgress({ message: event.message, percent: event.percent, stage: event.stage, limits: event.limits });
                 } else if (event.type === "result") {
                     return normalizeAnalysisResult(event.data);
                 } else if (event.type === "error") {

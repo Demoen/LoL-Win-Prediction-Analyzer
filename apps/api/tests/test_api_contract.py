@@ -12,6 +12,8 @@ class ProgressEvent(BaseModel):
     type: Literal["progress"]
     message: str
     percent: Union[int, float]
+    stage: Optional[str] = None
+    limits: Optional[Dict[str, Any]] = None
 
 
 class ErrorEvent(BaseModel):
@@ -184,6 +186,9 @@ def test_analyze_stream_contract_offline(client, monkeypatch):
 
         async def get_match_timeline(self, regional_routing: str, match_id: str):
             return {}
+
+        async def get_limits(self):
+            return {"maxConcurrent": 5, "inFlight": 0, "queued": 0}
 
     async def fake_get_ddragon_version():
         return "14.24.1"

@@ -1,4 +1,15 @@
-export type AnalyzeProgressUpdate = { message: string; percent: number };
+export type RiotApiLimits = {
+    maxConcurrent: number;
+    inFlight: number;
+    queued: number;
+};
+
+export type AnalyzeProgressUpdate = {
+    message: string;
+    percent: number;
+    stage?: string;
+    limits?: RiotApiLimits;
+};
 
 export type AnalysisUser = {
     game_name: string;
