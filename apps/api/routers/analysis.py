@@ -308,7 +308,7 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
 
             # 11. Timeline Series (Gold/XP Difference) + Heatmap Data
             match_timeline_series = {}
-            heatmap_data = {}
+            heatmap_data = None
             if last_match_obj:
                  try:
                      regional_routing = REGION_TO_ROUTING.get(request.region.lower(), "europe")
@@ -324,6 +324,47 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
 
                      if p_id > 0:
                          match_timeline_series = analyze_match_timeline_series(timeline, p_id, enemy_p_id)
+
+                         # Fallback for early-game advantage stats.
+                         # Riot's `challenges.*GoldExpAdvantage` keys are not reliably present in all queues/patches,
+                         # which would otherwise make these indicators always 0.
+                         try:
+                             timeline_points = (match_timeline_series or {}).get("timeline") or []
+
+                             def _closest_point(target_minute: int):
+                                 valid = [
+                                     p for p in timeline_points
+                                     if isinstance(p, dict)
+                                     and ("minute" in p)
+                                     and isinstance(p.get("minute"), (int, float))
+                                 ]
+                                 if not valid:
+                                     return None
+                                 return min(valid, key=lambda p: abs(float(p["minute"]) - float(target_minute)))
+
+                             for target_minute, stat_key in [
+                                 (8, "earlyLaningPhaseGoldExpAdvantage"),
+                                 (14, "laningPhaseGoldExpAdvantage"),
+                             ]:
+                                 # Only overwrite when missing/zero (preserve Riot-provided value if present).
+                                 current_val = last_match_stats.get(stat_key, 0) if isinstance(last_match_stats, dict) else 0
+                                 try:
+                                     current_num = float(current_val) if current_val is not None else 0.0
+                                 except Exception:
+                                     current_num = 0.0
+
+                                 if current_num == 0.0:
+                                     point = _closest_point(target_minute)
+                                     if point and ("laneGoldDelta" in point) and ("laneXpDelta" in point):
+                                         try:
+                                             lane_gold = float(point.get("laneGoldDelta") or 0)
+                                             lane_xp = float(point.get("laneXpDelta") or 0)
+                                             # Approximate Riot's combined gold+xp advantage metric.
+                                             last_match_stats[stat_key] = lane_gold + lane_xp
+                                         except Exception:
+                                             pass
+                         except Exception as e:
+                             print(f"Error computing early-game advantage fallback: {e}")
 
                      # Extract heatmap data for all participants
                      if timeline and last_match_obj.data:
