@@ -18,28 +18,164 @@ import numpy as np
 import math
 import json
 
+
+LANE_LEAD_MATCH_LIMIT_MAX = 21
+LANE_LEAD_TARGET_MINUTE = 14
+
+
+def _closest_timeline_point(points: list, target_minute: int):
+    valid = [
+        p for p in (points or [])
+        if isinstance(p, dict)
+        and ("minute" in p)
+        and isinstance(p.get("minute"), (int, float))
+    ]
+    if not valid:
+        return None
+    return min(valid, key=lambda p: abs(float(p["minute"]) - float(target_minute)))
+
+
+async def _compute_recent_lane_leads_at_minute(
+    db: AsyncSession,
+    puuid: str,
+    platform_region: str,
+    target_minute: int = LANE_LEAD_TARGET_MINUTE,
+    limit: int = LANE_LEAD_MATCH_LIMIT_MAX,
+) -> dict:
+    """Compute average lane-opponent gold/xp leads at a target minute across recent matches.
+
+    Returns keys:
+      - laneGoldLeadAt14
+      - laneXpLeadAt14
+      - laneLeadSampleSize
+    """
+    try:
+        result = await db.execute(
+            select(Participant, Match)
+            .join(Match)
+            .where(Participant.puuid == puuid)
+            .order_by(Match.game_creation.desc())
+            .limit(limit)
+        )
+        rows = result.all()
+        if not rows:
+            return {"laneGoldLeadAt14": 0.0, "laneXpLeadAt14": 0.0, "laneLeadSampleSize": 0}
+
+        regional_routing = REGION_TO_ROUTING.get((platform_region or "").lower(), "europe")
+
+        async def _one(participant: Participant, match: Match):
+            if match is None:
+                return None
+
+            match_id = getattr(match, "match_id", None)
+            match_data = getattr(match, "data", None)
+            if match_id is None or match_data is None:
+                return None
+
+            if not isinstance(match_data, dict):
+                return None
+
+            info = (match_data or {}).get("info", {})
+            participants = info.get("participants", []) if isinstance(info, dict) else []
+            me = next((p for p in participants if p.get("puuid") == puuid), None)
+            if not me:
+                return None
+
+            my_team = me.get("teamId")
+            my_role = me.get("teamPosition")
+            my_pid = me.get("participantId")
+            if not my_team or not my_role or not my_pid:
+                return None
+
+            enemy = next(
+                (
+                    p
+                    for p in participants
+                    if p.get("teamId") != my_team and p.get("teamPosition") == my_role
+                ),
+                None,
+            )
+            if not enemy:
+                return None
+            enemy_pid = enemy.get("participantId")
+            if not enemy_pid:
+                return None
+
+            timeline = await riot_service.get_match_timeline(regional_routing, str(match_id))
+            if not timeline:
+                return None
+
+            series = analyze_match_timeline_series(timeline, int(my_pid), int(enemy_pid))
+            points = (series or {}).get("timeline") or []
+            point = _closest_timeline_point(points, target_minute)
+            if not point:
+                return None
+
+            if "laneGoldDelta" not in point or "laneXpDelta" not in point:
+                return None
+
+            try:
+                gold_lead = float(point.get("laneGoldDelta") or 0.0)
+                xp_lead = float(point.get("laneXpDelta") or 0.0)
+                if not math.isfinite(gold_lead) or not math.isfinite(xp_lead):
+                    return None
+                return (gold_lead, xp_lead)
+            except Exception:
+                return None
+
+        # Fetch timelines concurrently; RiotService already rate-limits via semaphore.
+        tasks = [_one(participant, match) for participant, match in rows]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        gold_vals = []
+        xp_vals = []
+        for r in results:
+            if isinstance(r, Exception) or r is None:
+                continue
+            if not (isinstance(r, tuple) and len(r) == 2):
+                continue
+            g, x = r
+            try:
+                gold_vals.append(float(g))
+                xp_vals.append(float(x))
+            except Exception:
+                continue
+
+        sample = min(len(gold_vals), len(xp_vals))
+        if sample <= 0:
+            return {"laneGoldLeadAt14": 0.0, "laneXpLeadAt14": 0.0, "laneLeadSampleSize": 0}
+
+        return {
+            "laneGoldLeadAt14": float(sum(gold_vals) / len(gold_vals)),
+            "laneXpLeadAt14": float(sum(xp_vals) / len(xp_vals)),
+            "laneLeadSampleSize": int(sample),
+        }
+    except Exception as e:
+        print(f"Error computing recent lane leads: {e}")
+        return {"laneGoldLeadAt14": 0.0, "laneXpLeadAt14": 0.0, "laneLeadSampleSize": 0}
+
 router = APIRouter(prefix="/api")
 
 # Custom JSON encoder for numpy types and NaN/Infinity handling
 class NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.integer):
-            return int(obj)
-        if isinstance(obj, np.floating):
+    def default(self, o):
+        if isinstance(o, np.integer):
+            return int(o)
+        if isinstance(o, np.floating):
             # Handle NaN and Infinity - convert to None (null in JSON)
-            if np.isnan(obj) or np.isinf(obj):
+            if np.isnan(o) or np.isinf(o):
                 return None
-            return float(obj)
-        if isinstance(obj, np.bool_):
-            return bool(obj)
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        if isinstance(obj, float):
+            return float(o)
+        if isinstance(o, np.bool_):
+            return bool(o)
+        if isinstance(o, np.ndarray):
+            return o.tolist()
+        if isinstance(o, float):
             # Handle Python native float NaN/Infinity
-            if math.isnan(obj) or math.isinf(obj):
+            if math.isnan(o) or math.isinf(o):
                 return None
-            return obj
-        return super().default(obj)
+            return o
+        return super().default(o)
 
 def sanitize_for_json(obj):
     """Recursively sanitize a data structure for JSON serialization."""
@@ -170,6 +306,26 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
 
             # 4. Calculate weighted averages
             weighted_averages = model_instance.calculate_weighted_averages(df)
+
+            # Add timeline-derived lane opponent leads (gold/xp) at ~14 minutes.
+            # Riot's `challenges.*GoldExpAdvantage` is unreliable; timeline is the source of truth.
+            try:
+                lane_lead_limit = min(int(len(df)) if not df.empty else 0, LANE_LEAD_MATCH_LIMIT_MAX)
+                if lane_lead_limit <= 0:
+                    lane_lead_limit = LANE_LEAD_MATCH_LIMIT_MAX
+
+                yield json.dumps({"type": "progress", "message": f"Computing lane leads @14m (last {lane_lead_limit} matches)...", "percent": 79}) + "\n"
+                lane_leads = await _compute_recent_lane_leads_at_minute(
+                    db,
+                    user.puuid,
+                    request.region,
+                    target_minute=LANE_LEAD_TARGET_MINUTE,
+                    limit=lane_lead_limit,
+                )
+                if isinstance(weighted_averages, dict) and isinstance(lane_leads, dict):
+                    weighted_averages.update(lane_leads)
+            except Exception as e:
+                print(f"Error adding lane lead averages: {e}")
             
             # 8. Extract last match stats
             last_match_stats = {}
