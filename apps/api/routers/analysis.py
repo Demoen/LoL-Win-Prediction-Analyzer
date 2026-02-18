@@ -306,10 +306,6 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
                     "percent": _clamp_percent(percent),
                 }
                 try:
-                    payload["limits"] = await riot_service.get_limits()
-                except Exception:
-                    pass
-                try:
                     payload["queue"] = await analysis_queue.stats()
                 except Exception:
                     pass

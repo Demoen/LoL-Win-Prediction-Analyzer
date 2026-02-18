@@ -141,29 +141,36 @@ async def test_ddragon_version_pinned(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_ddragon_version_fallback_when_http_fails(monkeypatch):
+async def test_ddragon_version_delegates_to_riot_service(monkeypatch):
+    """When no pinned version, ddragon delegates to riot_service.get_ddragon_version()."""
     from services import ddragon
+    from services import riot as riot_mod
 
     monkeypatch.delenv("DDRAGON_VERSION", raising=False)
-    monkeypatch.setattr(ddragon, "_cache_version", None)
-    monkeypatch.setattr(ddragon, "_cache_fetched_at", 0.0)
 
-    class FakeResp:
-        def raise_for_status(self):
-            raise RuntimeError("503")
+    class FakeRiotService:
+        async def get_ddragon_version(self):
+            return "15.1.1"
 
-    class FakeClient:
-        async def __aenter__(self):
-            return self
+    monkeypatch.setattr(riot_mod, "riot_service", FakeRiotService())
 
-        async def __aexit__(self, exc_type, exc, tb):  # noqa: ANN001
-            return False
+    v = await ddragon.get_ddragon_version()
+    assert v == "15.1.1"
 
-        async def get(self, url: str):
-            assert url
-            return FakeResp()
 
-    monkeypatch.setattr(ddragon.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+@pytest.mark.anyio
+async def test_ddragon_version_fallback_when_service_fails(monkeypatch):
+    """When the library fails, fall back to the safe default."""
+    from services import ddragon
+    from services import riot as riot_mod
+
+    monkeypatch.delenv("DDRAGON_VERSION", raising=False)
+
+    class BrokenRiotService:
+        async def get_ddragon_version(self):
+            raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(riot_mod, "riot_service", BrokenRiotService())
 
     v = await ddragon.get_ddragon_version()
     assert isinstance(v, str) and v

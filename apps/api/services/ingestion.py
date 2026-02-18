@@ -3,6 +3,7 @@ from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
 from models import User, Match, Participant
 from services.riot import riot_service
+from riotskillissue import NotFoundError, RiotAPIError
 import asyncio
 import logging
 
@@ -92,6 +93,10 @@ class IngestionService:
                 details = await riot_service.get_match_details(routing, match_id)
                 await self.save_match(details)
                 new_matches.append(match_id)
+            except NotFoundError:
+                logger.debug("Match %s not found, skipping", match_id)
+            except RiotAPIError as e:
+                logger.error("Riot API error ingesting match %s: %s", match_id, e)
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -137,6 +142,12 @@ class IngestionService:
             try:
                 details = await riot_service.get_match_details(routing, match_id)
                 return (match_id, details, None)
+            except NotFoundError:
+                logger.debug("Match %s not found", match_id)
+                return (match_id, None, "not found")
+            except RiotAPIError as e:
+                logger.error("Riot API error fetching match %s: %s", match_id, e)
+                return (match_id, None, str(e))
             except Exception as e:
                 logger.error(f"Failed to fetch match {match_id}: {e}")
                 return (match_id, None, str(e))

@@ -9,7 +9,7 @@ python-multipart>=0.0.9
 python-dotenv>=1.0.0
 aiosqlite>=0.19.0
 asyncpg>=0.29.0
-riotskillissue
+riotskillissue>=0.2.0
 pandas>=2.2.0
 scikit-learn>=1.4.0
 numpy>=1.26.0

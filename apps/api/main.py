@@ -10,6 +10,9 @@ from init_db import init_models
 async def lifespan(app: FastAPI):
     await init_models()
     yield
+    # Gracefully close the Riot API client on shutdown
+    from services.riot import riot_service
+    await riot_service.close()
 
 app = FastAPI(title="Riot Win Prediction API", lifespan=lifespan)
 
