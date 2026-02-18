@@ -2,6 +2,8 @@ import os
 import logging
 from typing import Dict, Any, Optional
 
+import httpx
+
 from riotskillissue import (
     RiotClient,
     RiotClientConfig,
@@ -67,6 +69,19 @@ class RiotService:
                 config=config,
                 cache=MemoryCache(max_size=2048),
             )
+
+            # Fix: Riot API sometimes returns responses whose Content-Encoding
+            # header doesn't match the actual encoding (e.g. declares gzip but
+            # sends raw/deflate), causing zlib "incorrect header check" errors
+            # in httpx's automatic decompression.  Requesting "gzip, deflate"
+            # only (dropping "br"/brotli which may not be installed) and adding
+            # "identity" as a fallback avoids the issue.
+            try:
+                httpx_client = inst.client.http._client
+                httpx_client.headers["accept-encoding"] = "gzip, deflate, identity"
+            except Exception as exc:
+                logger.debug("Could not override Accept-Encoding: %s", exc)
+
             cls._instance = inst
         return cls._instance
 
@@ -115,7 +130,13 @@ class RiotService:
     async def get_match_timeline(
         self, regional_routing: str, match_id: str
     ) -> Optional[Any]:
-        """Fetch match timeline; returns ``None`` on 404 or transient errors."""
+        """Fetch match timeline; returns ``None`` on 404 or transient errors.
+
+        If the normal library call fails with a decompression error (zlib
+        "incorrect header check"), fall back to a direct httpx request with
+        ``Accept-Encoding: identity`` to bypass server-side compression
+        issues.
+        """
         try:
             return await self.client.match.get_timeline(
                 regional_routing, match_id
@@ -127,7 +148,43 @@ class RiotService:
             logger.warning("Error fetching timeline for %s: %s", match_id, e)
             return None
         except Exception as e:
+            err_msg = str(e).lower()
+            # Detect zlib / brotli decompression failures and retry without
+            # compression so the server sends a plain-text response.
+            if "decompressing" in err_msg or "incorrect header check" in err_msg or "zlib" in err_msg:
+                logger.warning(
+                    "Decompression error for timeline %s – retrying without compression: %s",
+                    match_id, e,
+                )
+                return await self._fetch_timeline_raw(regional_routing, match_id)
             logger.warning("Unexpected error fetching timeline for %s: %s", match_id, e)
+            return None
+
+    async def _fetch_timeline_raw(
+        self, regional_routing: str, match_id: str
+    ) -> Optional[Any]:
+        """Direct httpx GET for timelines, bypassing automatic decompression."""
+        try:
+            api_key = self.client.http.config.api_key
+            host = f"https://{regional_routing}.api.riotgames.com"
+            url = f"{host}/lol/match/v5/matches/{match_id}/timeline"
+            async with httpx.AsyncClient(
+                headers={
+                    "X-Riot-Token": api_key,
+                    "Accept-Encoding": "identity",
+                },
+                timeout=httpx.Timeout(30.0, connect=10.0),
+            ) as raw_client:
+                resp = await raw_client.get(url)
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            data = resp.json()
+            # Return the raw dict — downstream code already handles both
+            # Pydantic models and plain dicts via _get_attr_or_key().
+            return data
+        except Exception as exc:
+            logger.warning("Raw timeline fallback also failed for %s: %s", match_id, exc)
             return None
 
     async def get_league_entries(

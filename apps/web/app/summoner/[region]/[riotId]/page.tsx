@@ -97,14 +97,15 @@ function StatCard({ label, value, icon: Icon, subtext, trend, color }: { label: 
 }
 
 function InsightBar({ label, value, color = "bg-[#5842F4]", max = 100 }: { label: string; value: number; color?: string; max?: number }) {
+    const safeVal = typeof value === 'number' && Number.isFinite(value) ? value : 0;
     return (
         <div className="mb-3">
             <div className="flex justify-between text-xs font-bold uppercase tracking-wider mb-1">
                 <span className="text-zinc-400">{label}</span>
-                <span className="text-white">{value?.toFixed(1) || 0}%</span>
+                <span className="text-white">{safeVal.toFixed(1)}%</span>
             </div>
             <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                <div className={cn("h-full rounded-full transition-all duration-1000", color)} style={{ width: `${Math.min(((value || 0) / max) * 100, 100)}%` }} />
+                <div className={cn("h-full rounded-full transition-all duration-1000", color)} style={{ width: `${Math.min((safeVal / max) * 100, 100)}%` }} />
             </div>
         </div>
     );
@@ -459,14 +460,12 @@ export default function Dashboard() {
                                         <Layers className="w-6 h-6 text-purple-400" /> Performance Breakdown
                                     </h3>
                                     <div className="space-y-4">
-                                        <InsightBar label="Combat Efficiency" value={avg.combat_efficiency} max={100} color="bg-red-500" />
-                                        <InsightBar label="Vision Control" value={Math.min((avg.visionScorePerMinute * 100) / 2.5, 100)} max={100} color="bg-green-500" />
-                                        <InsightBar label="Aggression" value={avg.aggressionScore} max={100} color="bg-red-600" />
-                                        <InsightBar label="Invasion Pressure" value={Math.min(avg.jungleInvasionPressure / 1.5, 100)} max={100} color="bg-purple-500" />
-                                        <InsightBar label="Consistency" value={metrics?.consistency_score || 75} max={100} color="bg-blue-400" />
-                                        {territory_metrics?.forward_positioning_score !== undefined && (
-                                            <InsightBar label="Forward Pos" value={territory_metrics.forward_positioning_score} max={100} color="bg-orange-400" />
-                                        )}
+                                        <InsightBar label="Combat Efficiency" value={Number(avg.combat_efficiency) || 0} max={100} color="bg-red-500" />
+                                        <InsightBar label="Vision Control" value={Math.min(((Number(avg.visionScorePerMinute) || 0) * 100) / 2.5, 100)} max={100} color="bg-green-500" />
+                                        <InsightBar label="Aggression" value={Number(avg.aggressionScore) || 0} max={100} color="bg-red-600" />
+                                        <InsightBar label="Invasion Pressure" value={Math.min((Number(avg.jungleInvasionPressure) || 0) / 1.5, 100)} max={100} color="bg-purple-500" />
+                                        <InsightBar label="Consistency" value={Number(metrics?.consistency_score) || 75} max={100} color="bg-blue-400" />
+                                        <InsightBar label="Forward Pos" value={Number(territory_metrics?.forward_positioning_score) || 0} max={100} color="bg-orange-400" />
                                     </div>
                                 </div>
                             </div>
