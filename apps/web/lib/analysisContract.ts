@@ -4,11 +4,19 @@ export type RiotApiLimits = {
     queued: number;
 };
 
+export type QueueStats = {
+    maxConcurrent: number;
+    active: number;
+    queued: number;
+};
+
 export type AnalyzeProgressUpdate = {
     message: string;
     percent: number;
     stage?: string;
     limits?: RiotApiLimits;
+    queue?: QueueStats;
+    queuePosition?: number;
 };
 
 export type AnalysisUser = {

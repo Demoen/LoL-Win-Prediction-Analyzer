@@ -17,6 +17,68 @@ import asyncio
 import numpy as np
 import math
 import json
+import os
+import time
+
+
+# ---------------------------------------------------------------------------
+# Analysis Queue – limits how many analyses run concurrently and reports
+# queue position to waiting clients.
+# ---------------------------------------------------------------------------
+class AnalysisQueue:
+    """Process-wide concurrency gate for /analyze requests."""
+
+    def __init__(self, max_concurrent: int = 3):
+        self._max = max(1, max_concurrent)
+        self._sem = asyncio.Semaphore(self._max)
+        self._lock = asyncio.Lock()
+        self._active = 0
+        self._waiters: list[asyncio.Event] = []
+
+    # -- public stats --------------------------------------------------------
+    async def stats(self) -> dict:
+        async with self._lock:
+            return {
+                "maxConcurrent": self._max,
+                "active": self._active,
+                "queued": len(self._waiters),
+            }
+
+    async def queue_position(self, event: asyncio.Event) -> int:
+        """Return 1-based position of *event* in the waiting list, or 0 if not waiting."""
+        async with self._lock:
+            try:
+                return self._waiters.index(event) + 1
+            except ValueError:
+                return 0
+
+    # -- context manager (acquire / release) --------------------------------
+    async def acquire(self, notify: asyncio.Event) -> None:
+        """Register as waiting, acquire slot, then unregister."""
+        async with self._lock:
+            self._waiters.append(notify)
+        try:
+            await self._sem.acquire()
+        finally:
+            async with self._lock:
+                if notify in self._waiters:
+                    self._waiters.remove(notify)
+                self._active += 1
+        notify.set()  # unblock the generator
+
+    async def release(self) -> None:
+        async with self._lock:
+            self._active = max(0, self._active - 1)
+        self._sem.release()
+
+
+_raw_max_analysis = os.getenv("MAX_CONCURRENT_ANALYSES", "3")
+try:
+    _max_analysis = max(1, int(_raw_max_analysis))
+except Exception:
+    _max_analysis = 3
+
+analysis_queue = AnalysisQueue(max_concurrent=_max_analysis)
 
 
 LANE_LEAD_MATCH_LIMIT_MAX = 21
@@ -219,6 +281,12 @@ def _clamp_percent(p: object) -> int:
         return 0
     return int(max(0, min(100, round(n))))
 
+@router.get("/queue")
+async def get_queue_status():
+    """Return the current analysis queue stats."""
+    return await analysis_queue.stats()
+
+
 @router.post("/analyze")
 async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     # 1. Parse Riot ID
@@ -228,6 +296,7 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
     game_name, tag_line = request.riot_id.split("#", 1)
 
     async def analysis_generator():
+        slot_acquired = False
         try:
             async def _progress(stage: str, message: str, percent: object):
                 payload = {
@@ -240,7 +309,38 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
                     payload["limits"] = await riot_service.get_limits()
                 except Exception:
                     pass
+                try:
+                    payload["queue"] = await analysis_queue.stats()
+                except Exception:
+                    pass
                 return json.dumps(payload) + "\n"
+
+            # ---- Queue gate ------------------------------------------------
+            ready_event = asyncio.Event()
+            acquire_task = asyncio.ensure_future(analysis_queue.acquire(ready_event))
+
+            # While we wait for a slot, stream queue-position updates.
+            while not ready_event.is_set():
+                pos = await analysis_queue.queue_position(ready_event)
+                q_stats = await analysis_queue.stats()
+                yield json.dumps({
+                    "type": "progress",
+                    "stage": "QUEUED",
+                    "message": f"In queue — position {pos} of {q_stats['queued']}",
+                    "percent": 0,
+                    "queue": q_stats,
+                    "queuePosition": pos,
+                }) + "\n"
+                # Re-check every ~1.5s
+                try:
+                    await asyncio.wait_for(asyncio.shield(acquire_task), timeout=1.5)
+                except asyncio.TimeoutError:
+                    pass
+
+            # Ensure the acquire task is done (it should be)
+            await acquire_task
+            slot_acquired = True
+            # ---- End queue gate --------------------------------------------
 
             yield await _progress("FIND_ACCOUNT", "Finding user account...", 5)
 
@@ -610,6 +710,9 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
              import traceback
              traceback.print_exc()
              yield json.dumps({"type": "error", "message": f"Server error: {str(e)}"}) + "\n"
+        finally:
+            if slot_acquired:
+                await analysis_queue.release()
 
     headers = {
         "Cache-Control": "no-cache, no-transform",

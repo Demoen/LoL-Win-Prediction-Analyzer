@@ -136,6 +136,31 @@
     animation: spin-slow 3s linear infinite;
   }
 
+  /* Progress card utilities */
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(200%); }
+  }
+
+  .animate-shimmer {
+    animation: shimmer 2s ease-in-out infinite;
+  }
+
+  .text-shadow-glow {
+    text-shadow: 0 0 8px rgba(0, 209, 255, 0.5);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+  }
+
   /* LoL-inspired Animations */
   @keyframes energy-pulse {
 
