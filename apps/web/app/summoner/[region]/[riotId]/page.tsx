@@ -464,8 +464,8 @@ export default function Dashboard() {
                                         <InsightBar label="Aggression" value={avg.aggressionScore} max={100} color="bg-red-600" />
                                         <InsightBar label="Invasion Pressure" value={Math.min(avg.jungleInvasionPressure / 1.5, 100)} max={100} color="bg-purple-500" />
                                         <InsightBar label="Consistency" value={metrics?.consistency_score || 75} max={100} color="bg-blue-400" />
-                                        {territory_metrics?.time_in_enemy_territory_pct !== undefined && (
-                                            <InsightBar label="Forward Pos" value={territory_metrics.time_in_enemy_territory_pct} max={100} color="bg-orange-400" />
+                                        {territory_metrics?.forward_positioning_score !== undefined && (
+                                            <InsightBar label="Forward Pos" value={territory_metrics.forward_positioning_score} max={100} color="bg-orange-400" />
                                         )}
                                     </div>
                                 </div>
