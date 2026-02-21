@@ -381,10 +381,10 @@ export default function Dashboard() {
                             <img src={profileIconUrl} className={cn("w-12 h-12 rounded-xl border-2 shadow-xl", rankConfig ? rankConfig.border : "border-zinc-700")} />
                             <div className="flex items-center gap-4">
                                 <div className="flex flex-col justify-center">
-                                    <div className="text-xl font-black text-white tracking-tight leading-tight">{user.game_name} <span className="text-zinc-500 font-medium opacity-80">#{user.tag_line}</span></div>
-                                    <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mt-1 flex items-center gap-2 opacity-70">
+                                    <div className="text-xl font-black text-white tracking-tight leading-tight">{user.game_name} <span className="font-medium opacity-60" style={{ color: "rgba(200,168,75,0.6)" }}>#{user.tag_line}</span></div>
+                                    <div className="text-[11px] font-bold uppercase tracking-widest mt-1 flex items-center gap-2 opacity-70" style={{ color: "rgba(200,168,75,0.5)" }}>
                                         <span>{user.region}</span>
-                                        <span className="w-1 h-1 rounded-full bg-zinc-800"></span>
+                                        <span className="w-1 h-1 rounded-full" style={{ background: "rgba(200,168,75,0.3)" }}></span>
                                         <span>Level {user.summoner_level}</span>
                                     </div>
                                 </div>
@@ -407,9 +407,9 @@ export default function Dashboard() {
                                         </span>
                                     </div>
                                 ) : (
-                                    <div className="flex items-center gap-3 px-4 h-12 rounded-2xl shadow-lg shadow-black/40 bg-white/5">
-                                        <Medal className="w-6 h-6 text-zinc-500" />
-                                        <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap text-zinc-400">Unranked</span>
+                                    <div className="flex items-center gap-3 px-4 h-12 rounded-2xl shadow-lg shadow-black/40" style={{ background: "rgba(200,168,75,0.05)", border: "1px solid rgba(200,168,75,0.15)" }}>
+                                        <Medal className="w-6 h-6" style={{ color: "rgba(200,168,75,0.5)" }} />
+                                        <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap" style={{ color: "rgba(200,168,75,0.6)" }}>Unranked</span>
                                     </div>
                                 )}
                             </div>

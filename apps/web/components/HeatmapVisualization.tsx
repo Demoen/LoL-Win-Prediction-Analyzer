@@ -483,8 +483,8 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                     </div>
 
                     {/* Canvas */}
-                    <div className="rounded-2xl p-2 overflow-hidden" style={{ background: "rgba(200,168,75,0.025)", border: "1px solid rgba(200,168,75,0.1)" }}>
-                        <div ref={containerRef} className="w-full aspect-square max-w-[800px] mx-auto">
+                    <div className="rounded-2xl p-2 overflow-hidden max-w-[800px]" style={{ background: "rgba(200,168,75,0.025)", border: "1px solid rgba(200,168,75,0.1)" }}>
+                        <div ref={containerRef} className="w-full aspect-square">
                             <canvas ref={canvasRef} className="w-full h-full rounded-xl" />
                         </div>
                     </div>
