@@ -271,7 +271,7 @@ export function DetailedMatchAnalysis({
                                                 <Icon className="w-4 h-4" />
                                             </div>
                                             <div>
-                                                <div className="font-bold text-white text-sm">{driver.name}</div>
+                                                <div className="font-bold text-[#FFD870] text-sm">{driver.name}</div>
                                                 <div className="text-[10px] uppercase font-bold tracking-wider" style={{ color: "rgba(200,168,75,0.4)" }}>{driver.impact} Impact</div>
                                             </div>
                                         </div>
@@ -403,7 +403,7 @@ export function DetailedMatchAnalysis({
                                                     <Icon className="w-4 h-4" />
                                                 </div>
                                                 <div>
-                                                    <h4 className="font-bold text-white text-sm">{area.title}</h4>
+                                                    <h4 className="font-bold text-[#FFD870] text-sm">{area.title}</h4>
                                                     <div className="text-[10px] uppercase tracking-wider" style={{ color: "rgba(200,168,75,0.4)" }}>Gap Found</div>
                                                 </div>
                                             </div>
@@ -419,7 +419,7 @@ export function DetailedMatchAnalysis({
                                             <div>
                                                 <div className="flex justify-between text-xs mb-1">
                                                     <span className="font-bold" style={{ color: "rgba(200,168,75,0.5)" }}>You</span>
-                                                    <span className="text-white font-mono">{typeof area.current === 'number' ? area.current.toFixed(1) : area.current}</span>
+                                                    <span className="text-[#C8A84B] font-mono">{typeof area.current === 'number' ? area.current.toFixed(1) : area.current}</span>
                                                 </div>
                                                 <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "rgba(200,168,75,0.08)" }}>
                                                     {(() => {

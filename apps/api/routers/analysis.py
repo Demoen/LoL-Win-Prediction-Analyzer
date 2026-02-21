@@ -792,3 +792,56 @@ async def analyze_territory_for_player(db: AsyncSession, puuid: str, region: str
         traceback.print_exc()
         return {}
 
+
+# ---------------------------------------------------------------------------
+# AI Coach endpoint (GPT-5 nano via Responses API)
+# ---------------------------------------------------------------------------
+
+class CoachRequest(BaseModel):
+    system_prompt: str
+    user_prompt: str
+
+
+@router.post("/coach")
+async def ai_coach(req: CoachRequest):
+    """Call OpenAI with server-side key and return coaching analysis."""
+    import openai as _openai
+
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="OpenAI API key not configured on server.")
+
+    client = _openai.AsyncOpenAI(api_key=api_key)
+
+    try:
+        response = await client.responses.create(
+            model=os.getenv("OPENAI_COACH_MODEL", "gpt-5-nano"),
+            instructions=req.system_prompt,
+            input=req.user_prompt,
+            max_output_tokens=1800,
+            # Optional for GPT-5 family (adjust if you want)
+            reasoning={"effort": "low"},
+        )
+
+        # SDKs typically expose a convenience property for text output
+        content = getattr(response, "output_text", "") or ""
+
+        # Fallback parser in case output_text is empty / unavailable
+        if not content:
+            parts = []
+            for item in getattr(response, "output", []) or []:
+                for c in getattr(item, "content", []) or []:
+                    if getattr(c, "type", None) == "output_text":
+                        text = getattr(c, "text", "")
+                        if text:
+                            parts.append(text)
+            content = "".join(parts)
+
+        return {"content": content}
+
+    except _openai.AuthenticationError:
+        raise HTTPException(status_code=401, detail="Invalid OpenAI API key.")
+    except _openai.RateLimitError:
+        raise HTTPException(status_code=429, detail="OpenAI rate limit reached. Try again later.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OpenAI error: {str(e)}")

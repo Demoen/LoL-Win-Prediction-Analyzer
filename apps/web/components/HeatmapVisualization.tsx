@@ -453,7 +453,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                 <span className="px-3 py-1 bg-[#C8A84B]/10 text-[#C8A84B] rounded text-[10px] font-bold uppercase tracking-widest">Last Match</span>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-[auto_auto] gap-6 w-fit">
                 {/* Left: Map Canvas */}
                 <div className="space-y-4">
                     {/* Layer Toggles */}

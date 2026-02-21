@@ -143,6 +143,7 @@ function StatRow({ label, value, highlight = false, valueColor }: { label: strin
 import { DetailedMatchAnalysis } from "@/components/DetailedMatchAnalysis";
 import { PlayerPerformanceTrends } from "@/components/PlayerPerformanceTrends";
 import { HeatmapVisualization } from "@/components/HeatmapVisualization";
+import { AICoachTab } from "@/components/AICoachTab";
 
 export default function Dashboard() {
     const params = useParams();
@@ -154,7 +155,7 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [progress, setProgress] = useState<AnalyzeProgressUpdate>({ message: "Initializing...", percent: 0 });
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<"overview" | "match" | "trends" | "heatmap">("overview");
+    const [activeTab, setActiveTab] = useState<"overview" | "match" | "trends" | "heatmap" | "ai">("overview");
     const [rankEmblemErrored, setRankEmblemErrored] = useState(false);
 
     useEffect(() => {
@@ -346,8 +347,8 @@ export default function Dashboard() {
                     <img src="/logo.png" alt="NexusInsight" className="w-full h-full object-contain" />
                 </Link>
                 <nav className="flex flex-col gap-6 mt-auto mb-auto">
-                    {(["overview", "match", "trends", "heatmap"] as const).map((tab, i) => {
-                        const icons = [Trophy, Crosshair, ChartLine, Map];
+                    {(["overview", "match", "trends", "heatmap", "ai"] as const).map((tab, i) => {
+                        const icons = [Trophy, Crosshair, ChartLine, Map, Bot];
                         const Icon = icons[i];
                         const active = activeTab === tab;
                         return (
@@ -417,7 +418,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-4">
                         <div className="hidden md:flex items-center gap-1 rounded-lg p-1" style={{ background: "rgba(200,168,75,0.05)", border: "1px solid rgba(200,168,75,0.1)" }}>
-                            {["Overview", "Match", "Trends", "Heatmap"].map((tab) => {
+                            {["Overview", "Match", "Trends", "Heatmap", "AI"].map((tab) => {
                                 const active = activeTab === tab.toLowerCase();
                                 return (
                                     <button
@@ -443,7 +444,7 @@ export default function Dashboard() {
                     {activeTab === "overview" && (
                         <div className="space-y-8 animate-in fade-in slide-in-from-bottom duration-500">
                             {/* Top Stats */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="p-6 rounded-xl relative overflow-hidden group" style={{ background: "rgba(200,168,75,0.04)", border: "1px solid rgba(200,168,75,0.25)", boxShadow: "0 0 30px rgba(200,168,75,0.05)" }}>
                                     <div className="absolute top-0 right-0 p-4 opacity-30"><Zap className="w-8 h-8" style={{ color: "#C8A84B" }} /></div>
                                     <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] mb-2" style={{ color: "rgba(200,168,75,0.5)" }}>Win Probability</h3>
@@ -477,27 +478,6 @@ export default function Dashboard() {
                                         <div><span className="text-white">{fmt(avg.deaths)}</span> D</div>
                                         <div><span className="text-white">{fmt(avg.assists)}</span> A</div>
                                     </div>
-                                </div>
-
-                                <div className="p-6 rounded-xl" style={{ background: "rgba(200,168,75,0.03)", border: "1px solid rgba(200,168,75,0.1)" }}>
-                                    <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] mb-2" style={{ color: "rgba(200,168,75,0.5)" }}>Style Signature</h3>
-                                    <div className="flex flex-wrap gap-2 mt-2">
-                                        {player_moods.slice(0, 3).map((mood: Mood, i: number) => (
-                                            <span key={i} className={cn("px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest border", mood.color.replace('text-', 'border-').replace('text-', 'text-'))}>
-                                                {mood.title}
-                                            </span>
-                                        ))}
-                                    </div>
-                                    <div className="mt-3 text-xs line-clamp-2" style={{ color: "rgba(200,168,75,0.4)" }}>
-                                        {player_moods[0]?.description}
-                                    </div>
-                                </div>
-
-                                <div className="p-6 rounded-xl" style={{ background: "linear-gradient(135deg, rgba(200,168,75,0.07), rgba(200,168,75,0.02))", border: "1px solid rgba(200,168,75,0.18)" }}>
-                                    <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] mb-2" style={{ color: "#C8A84B" }}>AI Coach Insight</h3>
-                                    <p className="text-sm font-medium text-white italic">
-                                        "{player_moods[0]?.advice || 'Focus on maintaining your gold lead in mid-game transitions.'}"
-                                    </p>
                                 </div>
                             </div>
 
@@ -542,37 +522,7 @@ export default function Dashboard() {
                             </div>
 
                             {/* ML Insights */}
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                <div className="rounded-2xl p-8" style={{ background: "rgba(200,168,75,0.02)", border: "1px solid rgba(200,168,75,0.1)" }}>
-                                    <h3 className="text-xl font-black uppercase italic tracking-tighter flex items-center gap-3 mb-6">
-                                        <Crosshair className="w-6 h-6" style={{ color: "#C8A84B" }} /> Key Win Drivers
-                                    </h3>
-                                    <div className="space-y-4">
-                                        {win_drivers.slice(0, 4).map((driver: any, idx: number) => {
-                                            const diff = driver.diff_pct * 100;
-                                            return (
-                                                <div
-                                                    key={idx}
-                                                    className="relative group p-4 rounded-xl transition-all"
-                                                    style={{ background: "rgba(200,168,75,0.025)", borderLeft: "2px solid rgba(200,168,75,0.15)" }}
-                                                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(200,168,75,0.05)"; (e.currentTarget as HTMLElement).style.borderLeftColor = "rgba(200,168,75,0.5)"; }}
-                                                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(200,168,75,0.025)"; (e.currentTarget as HTMLElement).style.borderLeftColor = "rgba(200,168,75,0.15)"; }}
-                                                >
-                                                    <div className="flex justify-between items-center relative z-10">
-                                                        <div>
-                                                            <div className="text-xs font-bold uppercase tracking-[0.15em] mb-1" style={{ color: "rgba(200,168,75,0.4)" }}>Win Driver {idx + 1}</div>
-                                                            <div className="font-bold text-white text-sm">{driver.name}</div>
-                                                        </div>
-                                                        <div className={cn("text-lg font-black italic", diff > 0 ? "text-green-400" : "text-red-400")}>
-                                                            {diff > 0 ? "+" : ""}{diff.toFixed(1)}%
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
+                            <div className="grid grid-cols-1 gap-8">
                                 <div className="rounded-2xl p-8" style={{ background: "rgba(200,168,75,0.02)", border: "1px solid rgba(200,168,75,0.1)" }}>
                                     <h3 className="text-xl font-black uppercase italic tracking-tighter flex items-center gap-3 mb-6">
                                         <Layers className="w-6 h-6" style={{ color: "#C8A84B" }} /> Performance Breakdown
@@ -610,6 +560,7 @@ export default function Dashboard() {
                             <PlayerPerformanceTrends
                                 data={performance_trends}
                                 loading={loading}
+                                winDrivers={win_drivers}
                             />
                         </div>
                     )}
@@ -620,6 +571,23 @@ export default function Dashboard() {
                             <HeatmapVisualization
                                 heatmapData={heatmap_data}
                                 ddragonVersion={ddragon_version}
+                            />
+                        </div>
+                    )}
+
+                    {/* AI COACH TAB */}
+                    {activeTab === "ai" && (
+                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom duration-500">
+                            <AICoachTab
+                                lastMatchStats={lastMatch}
+                                winDrivers={win_drivers}
+                                skillFocus={skill_focus}
+                                playerMoods={player_moods}
+                                weightedAverages={avg}
+                                enemyStats={enemyStats}
+                                winProbability={win_probability}
+                                winRate={win_rate}
+                                timelineSeries={match_timeline_series}
                             />
                         </div>
                     )}

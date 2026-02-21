@@ -2,14 +2,15 @@
 
 import { useMemo, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Trophy, TrendingUp, Eye, Target, Crosshair } from 'lucide-react';
+import { TrendingUp, Eye, Target, Crosshair } from 'lucide-react';
 
 interface PlayerPerformanceTrendsProps {
     data: any[]; // List of previous match stats
     loading?: boolean;
+    winDrivers?: any[]; // Key win drivers from ML analysis
 }
 
-export function PlayerPerformanceTrends({ data, loading = false }: PlayerPerformanceTrendsProps) {
+export function PlayerPerformanceTrends({ data, loading = false, winDrivers = [] }: PlayerPerformanceTrendsProps) {
     const [activeMetric, setActiveMetric] = useState<'kda' | 'aggression' | 'vision' | 'economy'>('kda');
 
     const safeAvg = (rows: any[], key: string) => {
@@ -120,7 +121,7 @@ export function PlayerPerformanceTrends({ data, loading = false }: PlayerPerform
                 </div>
                 <div className="p-5 rounded-2xl relative overflow-hidden group" style={{ background: "rgba(200,168,75,0.03)", border: "1px solid rgba(200,168,75,0.1)" }}>
                     <p className="text-[10px] font-bold uppercase tracking-[0.15em] mb-1" style={{ color: "rgba(200,168,75,0.5)" }}>Avg KDA</p>
-                    <p className="text-2xl font-black text-white">{avgKda.toFixed(2)}</p>
+                    <p className="text-2xl font-black text-[#C8A84B]">{avgKda.toFixed(2)}</p>
                 </div>
                 <div className="p-5 rounded-2xl relative overflow-hidden group" style={{ background: "rgba(200,168,75,0.03)", border: "1px solid rgba(200,168,75,0.1)" }}>
                     <p className="text-[10px] font-bold uppercase tracking-[0.15em] mb-1" style={{ color: "rgba(200,168,75,0.5)" }}>Avg Aggression</p>
@@ -242,7 +243,7 @@ export function PlayerPerformanceTrends({ data, loading = false }: PlayerPerform
                         <div className="w-10 h-10 rounded-lg bg-[#5842F4]/20 flex items-center justify-center mb-4 text-[#5842F4] group-hover:scale-110 transition-transform">
                             <Eye className="w-5 h-5" />
                         </div>
-                        <h4 className="font-bold text-white mb-1">Vision Dominance</h4>
+                        <h4 className="font-bold text-[#FFD870] mb-1">Vision Dominance</h4>
                         {visionDeltaPct === undefined ? (
                             <p className="text-sm" style={{ color: "rgba(200,168,75,0.45)" }}>Not enough match history yet to calculate a trend.</p>
                         ) : (
@@ -258,7 +259,7 @@ export function PlayerPerformanceTrends({ data, loading = false }: PlayerPerform
                         <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center mb-4 text-red-500 group-hover:scale-110 transition-transform">
                             <Crosshair className="w-5 h-5" />
                         </div>
-                        <h4 className="font-bold text-white mb-1">Aggression</h4>
+                        <h4 className="font-bold text-[#FFD870] mb-1">Aggression</h4>
                         {aggressionDeltaPct === undefined ? (
                             <p className="text-sm" style={{ color: "rgba(200,168,75,0.45)" }}>Not enough match history yet to calculate a trend.</p>
                         ) : aggressionDeltaPct < -5 ? (
@@ -274,7 +275,7 @@ export function PlayerPerformanceTrends({ data, loading = false }: PlayerPerform
                         <div className="w-10 h-10 rounded-lg bg-[#00D1FF]/20 flex items-center justify-center mb-4 text-[#00D1FF] group-hover:scale-110 transition-transform">
                             <Target className="w-5 h-5" />
                         </div>
-                        <h4 className="font-bold text-white mb-1">Consistency</h4>
+                        <h4 className="font-bold text-[#FFD870] mb-1">Consistency</h4>
                         {chartData.length ? (
                             <p className="text-sm" style={{ color: "rgba(200,168,75,0.45)" }}>
                                 {(() => {
@@ -282,9 +283,10 @@ export function PlayerPerformanceTrends({ data, loading = false }: PlayerPerform
                                     if (recentConsistency === undefined || !Number.isFinite(recentConsistency)) {
                                         return 'Not enough match history yet to calculate consistency.';
                                     }
-                                    if (recentConsistency >= 80) return 'Your gold/min variance is low. You are playing a consistent tempo game.';
-                                    if (recentConsistency >= 60) return 'Your tempo is somewhat swingy. Try to stabilize your first two resets.';
-                                    return 'Your games are highly variable. Focus on repeatable early-game fundamentals.';
+                                    const score = Math.round(recentConsistency);
+                                    if (recentConsistency >= 80) return <span>Your consistency score is{' '}<span className="text-green-500 font-bold">{score}</span>. You are playing a consistent tempo game.</span>;
+                                    if (recentConsistency >= 60) return <span>Your consistency score is{' '}<span className="font-bold" style={{ color: 'rgba(200,168,75,0.8)' }}>{score}</span>. Tempo is somewhat swingy — stabilize your first two resets.</span>;
+                                    return <span>Your consistency score is{' '}<span className="text-red-500 font-bold">{score}</span>. Focus on repeatable early-game fundamentals.</span>;
                                 })()}
                             </p>
                         ) : (
@@ -293,6 +295,107 @@ export function PlayerPerformanceTrends({ data, loading = false }: PlayerPerform
                     </div>
                 </div>
             </div>
+
+            {/* Key Win Drivers */}
+            {winDrivers && winDrivers.length > 0 && (() => {
+                const sorted = [...winDrivers].sort((a, b) => Math.abs(b.diff_pct ?? 0) - Math.abs(a.diff_pct ?? 0));
+                const maxAbsDiff = Math.max(...sorted.map(d => Math.abs(d.diff_pct ?? 0)), 1);
+
+                const impactColor = (impact: string) => {
+                    switch ((impact ?? '').toLowerCase()) {
+                        case 'critical': return { bar: '#ef4444', badge: 'text-red-400 bg-red-400/10 border-red-400/20' };
+                        case 'high':     return { bar: '#f97316', badge: 'text-orange-400 bg-orange-400/10 border-orange-400/20' };
+                        case 'medium':   return { bar: '#C8A84B', badge: 'text-[#FFD870] bg-[#FFD870]/10 border-[#FFD870]/20' };
+                        default:         return { bar: 'rgba(200,168,75,0.4)', badge: 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20' };
+                    }
+                };
+
+                const fmtVal = (v: any) => {
+                    if (v === undefined || v === null) return '—';
+                    const n = Number(v);
+                    if (!Number.isFinite(n)) return String(v);
+                    return n % 1 === 0 ? n.toFixed(0) : n.toFixed(2);
+                };
+
+                return (
+                    <div className="rounded-2xl p-8" style={{ background: "rgba(200,168,75,0.02)", border: "1px solid rgba(200,168,75,0.1)" }}>
+                        <div className="flex items-center gap-3 mb-2">
+                            <Crosshair className="w-6 h-6" style={{ color: "#C8A84B" }} />
+                            <h3 className="text-xl font-black uppercase italic tracking-tighter" style={{ color: "#FFD870" }}>Key Win Drivers</h3>
+                            <span className="px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest" style={{ background: "rgba(200,168,75,0.06)", color: "rgba(200,168,75,0.5)", border: "1px solid rgba(200,168,75,0.12)" }}>
+                                Based on {data.length} matches
+                            </span>
+                        </div>
+                        <p className="text-xs mb-6" style={{ color: "rgba(200,168,75,0.4)" }}>
+                            Metrics that most differentiate your wins — bar width shows relative importance across all drivers.
+                        </p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {sorted.map((driver: any, idx: number) => {
+                                const colors = impactColor(driver.impact);
+                                const barWidth = Math.round((Math.abs(driver.diff_pct ?? 0) / maxAbsDiff) * 100);
+                                const positive = (driver.diff_pct ?? 0) >= 0;
+
+                                return (
+                                    <div
+                                        key={idx}
+                                        className="p-5 rounded-xl group transition-all relative overflow-hidden"
+                                        style={{ background: "rgba(200,168,75,0.025)", border: "1px solid rgba(200,168,75,0.1)" }}
+                                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(200,168,75,0.05)"; }}
+                                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(200,168,75,0.025)"; }}
+                                    >
+                                        {/* Rank badge */}
+                                        <div className="absolute top-4 right-4 text-[10px] font-black uppercase tracking-widest opacity-20 text-2xl leading-none">
+                                            #{idx + 1}
+                                        </div>
+
+                                        {/* Header */}
+                                        <div className="flex items-start gap-3 mb-3">
+                                            <div className="flex-1">
+                                                <div className="font-bold text-white text-sm leading-tight mb-1">{driver.name}</div>
+                                                <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border ${colors.badge}`}>
+                                                    {driver.impact ?? 'Low'} Impact
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Impact bar */}
+                                        <div className="mb-3">
+                                            <div className="h-[4px] w-full rounded-full overflow-hidden" style={{ background: "rgba(200,168,75,0.08)" }}>
+                                                <div
+                                                    className="h-full rounded-full transition-all duration-700"
+                                                    style={{ width: `${barWidth}%`, background: colors.bar, boxShadow: `0 0 6px ${colors.bar}40` }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Value comparison */}
+                                        {(driver.value !== undefined || driver.baseline !== undefined) && (
+                                            <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.1em]">
+                                                {driver.value !== undefined && (
+                                                    <div className="flex flex-col">
+                                                        <span style={{ color: "rgba(200,168,75,0.4)" }}>Your Wins</span>
+                                                        <span className={positive ? 'text-green-400' : 'text-red-400'}>{fmtVal(driver.value)}</span>
+                                                    </div>
+                                                )}
+                                                {driver.value !== undefined && driver.baseline !== undefined && (
+                                                    <div className="h-8 w-px" style={{ background: "rgba(200,168,75,0.15)" }} />
+                                                )}
+                                                {driver.baseline !== undefined && (
+                                                    <div className="flex flex-col">
+                                                        <span style={{ color: "rgba(200,168,75,0.4)" }}>Avg</span>
+                                                        <span style={{ color: "rgba(255,255,255,0.5)" }}>{fmtVal(driver.baseline)}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 }

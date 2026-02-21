@@ -153,3 +153,17 @@ export async function analyzeStats(
         throw error;
     }
 }
+
+export async function coachAnalysis(systemPrompt: string, userPrompt: string): Promise<string> {
+    const res = await fetch(`${API_URL}/coach`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ system_prompt: systemPrompt, user_prompt: userPrompt }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any)?.detail || `Server error ${res.status}`);
+    }
+    const json = await res.json();
+    return (json as any).content as string;
+}
