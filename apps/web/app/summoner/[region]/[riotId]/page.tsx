@@ -463,7 +463,7 @@ export default function Dashboard() {
                                         <InsightBar label="Combat Efficiency" value={Number(avg.combat_efficiency) || 0} max={100} color="bg-red-500" />
                                         <InsightBar label="Vision Control" value={Math.min(((Number(avg.visionScorePerMinute) || 0) * 100) / 2.5, 100)} max={100} color="bg-green-500" />
                                         <InsightBar label="Aggression" value={Number(avg.aggressionScore) || 0} max={100} color="bg-red-600" />
-                                        <InsightBar label="Invasion Pressure" value={Math.min((Number(avg.jungleInvasionPressure) || 0) / 1.5, 100)} max={100} color="bg-purple-500" />
+                                        <InsightBar label="Time in Enemy Half" value={Number(territory_metrics?.time_in_enemy_territory_pct) || 0} max={100} color="bg-purple-500" />
                                         <InsightBar label="Consistency" value={Number(metrics?.consistency_score) || 75} max={100} color="bg-blue-400" />
                                         <InsightBar label="Forward Pos" value={Number(territory_metrics?.forward_positioning_score) || 0} max={100} color="bg-orange-400" />
                                     </div>
