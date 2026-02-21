@@ -38,7 +38,7 @@ const StatComparisonRow = ({ label, userValue, enemyValue, unit = '', decimal = 
                     {format(userValue, signed)}{unit}
                 </div>
                 <div className="text-[10px] text-slate-600 font-mono">vs</div>
-                <div className={`text-xs font-mono font-bold ${!isWinning && !isEven ? 'text-red-400' : 'text-[#5842F4]/70'}`}>
+                <div className={`text-xs font-mono font-bold ${!isWinning && !isEven ? 'text-red-400' : 'text-[#C8A84B]/60'}`}>
                     {format(enemyValue, signedEnemy)}{unit}
                 </div>
             </div>
@@ -143,13 +143,13 @@ export function DetailedMatchAnalysis({
     return (
         <div className="space-y-8">
             {/* Lane Matchup Section */}
-            <section className="bg-gradient-to-br from-[#5842F4]/5 to-transparent border border-white/5 p-8 rounded-3xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-32 bg-[#5842F4]/10 blur-3xl rounded-full pointer-events-none -translate-y-1/2 translate-x-1/2"></div>
+            <section className="bg-gradient-to-br from-[#C8A84B]/5 to-transparent border border-[#C8A84B]/10 p-8 rounded-3xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-32 bg-[#C8A84B]/10 blur-3xl rounded-full pointer-events-none -translate-y-1/2 translate-x-1/2"></div>
 
                 <div className="flex flex-col md:flex-row items-center justify-between mb-8 relative z-10 gap-6">
                     <div className="flex items-center gap-4">
-                        <div className="bg-[#0a0a0f] p-3 rounded-xl border border-white/10 shadow-xl">
-                            <Swords className="w-8 h-8 text-[#00D1FF]" />
+                        <div className="bg-[#0a0a0f] p-3 rounded-xl border border-[#C8A84B]/20 shadow-xl">
+                            <Swords className="w-8 h-8 text-[#C8A84B]" />
                         </div>
                         <div>
                             <h2 className="text-2xl font-black uppercase text-white italic tracking-tighter">Lane Matchup</h2>
@@ -163,7 +163,7 @@ export function DetailedMatchAnalysis({
                         </div>
                         <div className="h-8 w-px bg-white/10"></div>
                         <div className="text-left">
-                            <div className="text-[#5842F4] font-black text-xl tracking-tighter">ENEMY</div>
+                            <div className="text-red-400 font-black text-xl tracking-tighter">ENEMY</div>
                             <div className="text-white/50 text-[10px] font-bold uppercase tracking-widest truncate max-w-[100px]">{enemy.championName || "Opponent"}</div>
                         </div>
                     </div>
@@ -267,7 +267,7 @@ export function DetailedMatchAnalysis({
                                 return (
                                     <div key={idx} className="grid grid-cols-12 p-4 items-center gap-2 hover:bg-white/5 transition-colors group">
                                         <div className="col-span-5 text-left flex items-center gap-3">
-                                            <div className="p-2 rounded-lg bg-[#5842F4]/10 text-[#5842F4] group-hover:scale-110 transition-transform">
+                                            <div className="p-2 rounded-lg bg-[#C8A84B]/10 text-[#C8A84B] group-hover:scale-110 transition-transform">
                                                 <Icon className="w-4 h-4" />
                                             </div>
                                             <div>
@@ -305,15 +305,15 @@ export function DetailedMatchAnalysis({
                     <section>
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2">
-                                <TrendingUp className="text-[#5842F4] w-5 h-5" />
+                                <TrendingUp className="text-[#C8A84B] w-5 h-5" />
                                 <h2 className="text-xl font-bold text-white">Match Momentum</h2>
                             </div>
                             <div className="flex gap-2 text-xs font-bold bg-white/5 p-1 rounded-lg">
                                 <button
                                     onClick={() => setActiveMetric('gold')}
-                                    className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-2 ${activeMetric === 'gold' ? 'bg-[#5842F4] text-white shadow-lg' : 'text-zinc-500 hover:text-white'}`}
+                                    className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-2 ${activeMetric === 'gold' ? 'bg-[#C8A84B] text-[#030308] shadow-lg' : 'text-zinc-500 hover:text-white'}`}
                                 >
-                                    <div className={`w-2 h-2 rounded-full ${activeMetric === 'gold' ? 'bg-white' : 'bg-[#5842F4]'}`}></div>
+                                    <div className={`w-2 h-2 rounded-full ${activeMetric === 'gold' ? 'bg-[#030308]' : 'bg-[#C8A84B]'}`}></div>
                                     Gold
                                 </button>
                                 <button
@@ -364,8 +364,8 @@ export function DetailedMatchAnalysis({
                                         {/* Gold */}
                                         {activeMetric === 'gold' && (
                                             <>
-                                                <Area type="monotone" dataKey="userGold" stroke="#5842F4" fill="#5842F4" fillOpacity={0.1} strokeWidth={3} name="You" animationDuration={500} />
-                                                <Area type="monotone" dataKey="enemyGold" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.1} strokeWidth={3} name="Enemy" animationDuration={500} />
+                                                <Area type="monotone" dataKey="userGold" stroke="#C8A84B" fill="#C8A84B" fillOpacity={0.1} strokeWidth={3} name="You" animationDuration={500} />
+                                                <Area type="monotone" dataKey="enemyGold" stroke="#ef4444" fill="#ef4444" fillOpacity={0.1} strokeWidth={3} name="Enemy" animationDuration={500} />
                                             </>
                                         )}
                                     </AreaChart>

@@ -56,23 +56,23 @@ function blurGrid(grid: Float32Array, w: number, h: number, passes: number) {
     }
 }
 
-// ── Color ramp: transparent → cyan → purple → white-hot ──
+// ── Color ramp: transparent → deep gold → bright gold → white-hot ──
 function heatColor(t: number): [number, number, number, number] {
     if (t < 0.02) return [0, 0, 0, 0];
     if (t < 0.25) {
         const f = (t - 0.02) / 0.23;
-        return [0, Math.round(180 * f), Math.round(255 * f), Math.round(100 * f)];
+        return [Math.round(160 * f), Math.round(120 * f), Math.round(32 * f), Math.round(100 * f)];
     }
     if (t < 0.55) {
         const f = (t - 0.25) / 0.30;
-        return [Math.round(88 * f), Math.round(180 + 29 * f), Math.round(255), Math.round(100 + 60 * f)];
+        return [Math.round(160 + 40 * f), Math.round(120 + 48 * f), Math.round(32 + 43 * f), Math.round(100 + 60 * f)];
     }
     if (t < 0.8) {
         const f = (t - 0.55) / 0.25;
-        return [Math.round(88 + 80 * f), Math.round(209 - 143 * f), Math.round(255 - 11 * f), Math.round(160 + 30 * f)];
+        return [Math.round(200 + 55 * f), Math.round(168 + 48 * f), Math.round(75 + 37 * f), Math.round(160 + 50 * f)];
     }
     const f = (t - 0.8) / 0.2;
-    return [Math.round(168 + 87 * f), Math.round(66 + 189 * f), Math.round(244 + 11 * f), Math.round(190 + 40 * f)];
+    return [255, Math.round(216 + 24 * f), Math.round(112 + 68 * f), Math.round(210 + 45 * f)];
 }
 
 function goldColor(t: number): [number, number, number, number] {
@@ -379,7 +379,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                 let fillColor = "#FFD700";
                 let label = "W";
                 if (w.wardType === "CONTROL_WARD") { fillColor = "#FF69B4"; label = "C"; }
-                else if (w.wardType === "BLUE_TRINKET") { fillColor = "#00D1FF"; label = "B"; }
+                else if (w.wardType === "BLUE_TRINKET") { fillColor = "#7EC8E3"; label = "B"; }
                 const r = Math.max(5, 7 * s);
 
                 ctx.save();
@@ -448,9 +448,9 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
         <div className="space-y-6">
             {/* Header */}
             <div className="flex items-center gap-3">
-                <MapIcon className="w-6 h-6 text-[#00D1FF]" />
+                <MapIcon className="w-6 h-6 text-[#C8A84B]" />
                 <h2 className="text-xl font-black uppercase italic tracking-tighter">Match Heatmap</h2>
-                <span className="px-3 py-1 bg-[#00D1FF]/10 text-[#00D1FF] rounded text-[10px] font-bold uppercase tracking-widest">Last Match</span>
+                <span className="px-3 py-1 bg-[#C8A84B]/10 text-[#C8A84B] rounded text-[10px] font-bold uppercase tracking-widest">Last Match</span>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6">
@@ -460,7 +460,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                     <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mr-1">Layers</span>
                         {([
-                            { key: "positions" as const, label: "Heat", color: "bg-[#00D1FF]", icon: Flame },
+                            { key: "positions" as const, label: "Heat", color: "bg-[#C8A84B]", icon: Flame },
                             { key: "kills" as const, label: "Kills", color: "bg-red-500", icon: Skull },
                             { key: "wards" as const, label: "Wards", color: "bg-[#FFD700]", icon: Eye },
                             { key: "goldZones" as const, label: "Gold", color: "bg-amber-500", icon: Coins },
@@ -513,7 +513,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                                     <span>Control</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                    <div className="w-4 h-2.5 rounded-full bg-[#00D1FF]" />
+                                    <div className="w-4 h-2.5 rounded-full bg-[#7EC8E3]" />
                                     <span>Blue Trinket</span>
                                 </div>
                                 <span className="text-zinc-600">({wardCount} wards)</span>
@@ -521,7 +521,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                         )}
                         {layers.positions && (
                             <div className="flex items-center gap-1.5">
-                                <div className="w-10 h-2.5 rounded-sm" style={{ background: "linear-gradient(to right, transparent, #00D1FF, #5842F4, white)" }} />
+                                <div className="w-10 h-2.5 rounded-sm" style={{ background: "linear-gradient(to right, transparent, #C8A84B, #FFD870, white)" }} />
                                 <span>Density</span>
                             </div>
                         )}
@@ -544,7 +544,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                         className={cn(
                             "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all",
                             selectedParticipant === null
-                                ? "bg-[#5842F4] text-white shadow-lg shadow-[#5842F4]/20"
+                                ? "bg-[#C8A84B] text-[#030308] shadow-lg shadow-[#C8A84B]/20"
                                 : "bg-white/5 text-zinc-500 hover:text-white"
                         )}
                     >
@@ -562,14 +562,14 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                                 className={cn(
                                     "w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-all",
                                     selectedParticipant === p.participantId
-                                        ? "bg-[#00D1FF]/15 border border-[#00D1FF]/40 shadow-[0_0_10px_rgba(0,209,255,0.15)]"
+                                        ? "bg-[#C8A84B]/15 border border-[#C8A84B]/40 shadow-[0_0_10px_rgba(200,168,75,0.15)]"
                                         : "hover:bg-white/5 border border-transparent"
                                 )}
                             >
                                 <img
                                     src={`https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${championAssetKey(p.championName)}.png`}
                                     alt={p.championName}
-                                    className={cn("w-7 h-7 rounded-md border", selectedParticipant === p.participantId ? "border-[#00D1FF]" : "border-blue-500/20")}
+                                    className={cn("w-7 h-7 rounded-md border", selectedParticipant === p.participantId ? "border-[#C8A84B]" : "border-blue-500/20")}
                                     onError={(e) => { const img = e.currentTarget; if (!img.dataset.fallback) { img.dataset.fallback = "1"; img.src = "/logo.png"; } }}
                                 />
                                 <span className={cn("text-[11px] font-semibold truncate", selectedParticipant === p.participantId ? "text-white" : "text-zinc-400")}>
@@ -589,14 +589,14 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                                 className={cn(
                                     "w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-all",
                                     selectedParticipant === p.participantId
-                                        ? "bg-[#00D1FF]/15 border border-[#00D1FF]/40 shadow-[0_0_10px_rgba(0,209,255,0.15)]"
+                                        ? "bg-[#C8A84B]/15 border border-[#C8A84B]/40 shadow-[0_0_10px_rgba(200,168,75,0.15)]"
                                         : "hover:bg-white/5 border border-transparent"
                                 )}
                             >
                                 <img
                                     src={`https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${championAssetKey(p.championName)}.png`}
                                     alt={p.championName}
-                                    className={cn("w-7 h-7 rounded-md border", selectedParticipant === p.participantId ? "border-[#00D1FF]" : "border-red-500/20")}
+                                    className={cn("w-7 h-7 rounded-md border", selectedParticipant === p.participantId ? "border-[#C8A84B]" : "border-red-500/20")}
                                     onError={(e) => { const img = e.currentTarget; if (!img.dataset.fallback) { img.dataset.fallback = "1"; img.src = "/logo.png"; } }}
                                 />
                                 <span className={cn("text-[11px] font-semibold truncate", selectedParticipant === p.participantId ? "text-white" : "text-zinc-400")}>
