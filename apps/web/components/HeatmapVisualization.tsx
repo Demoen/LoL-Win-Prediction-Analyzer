@@ -431,10 +431,10 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
     // ── Empty state ──
     if (!heatmapData || !heatmapData.participants?.length) {
         return (
-            <div className="glass rounded-3xl border border-white/5 flex items-center justify-center h-[500px]">
+            <div className="rounded-2xl flex items-center justify-center h-[500px]" style={{ background: "rgba(200,168,75,0.025)", border: "1px solid rgba(200,168,75,0.1)" }}>
                 <div className="text-center">
-                    <MapIcon className="w-12 h-12 mx-auto mb-3 text-zinc-600" />
-                    <p className="text-sm text-zinc-500">No heatmap data available for the last match.</p>
+                    <MapIcon className="w-12 h-12 mx-auto mb-3" style={{ color: "rgba(200,168,75,0.3)" }} />
+                    <p className="text-sm" style={{ color: "rgba(200,168,75,0.4)" }}>No heatmap data available for the last match.</p>
                 </div>
             </div>
         );
@@ -458,7 +458,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                 <div className="space-y-4">
                     {/* Layer Toggles */}
                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mr-1">Layers</span>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.15em] mr-1" style={{ color: "rgba(200,168,75,0.5)" }}>Layers</span>
                         {([
                             { key: "positions" as const, label: "Heat", color: "bg-[#C8A84B]", icon: Flame },
                             { key: "kills" as const, label: "Kills", color: "bg-red-500", icon: Skull },
@@ -472,8 +472,9 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                                     "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all",
                                     layers[key]
                                         ? `${color} text-white shadow-lg`
-                                        : "bg-white/5 text-zinc-500 hover:text-white"
+                                        : "text-white/40 hover:text-white"
                                 )}
+                                style={!layers[key] ? { background: "rgba(200,168,75,0.05)", border: "1px solid rgba(200,168,75,0.12)" } : {}}
                             >
                                 <Icon className="w-3.5 h-3.5" />
                                 {label}
@@ -482,14 +483,14 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                     </div>
 
                     {/* Canvas */}
-                    <div className="glass rounded-2xl border border-white/5 p-2 overflow-hidden">
+                    <div className="rounded-2xl p-2 overflow-hidden" style={{ background: "rgba(200,168,75,0.025)", border: "1px solid rgba(200,168,75,0.1)" }}>
                         <div ref={containerRef} className="w-full aspect-square max-w-[800px] mx-auto">
                             <canvas ref={canvasRef} className="w-full h-full rounded-xl" />
                         </div>
                     </div>
 
                     {/* Legend */}
-                    <div className="flex flex-wrap gap-5 text-[11px] text-zinc-400 px-1">
+                    <div className="flex flex-wrap gap-5 text-[11px] px-1" style={{ color: "rgba(200,168,75,0.45)" }}>
                         {layers.kills && (
                             <>
                                 <div className="flex items-center gap-1.5">
@@ -516,7 +517,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                                     <div className="w-4 h-2.5 rounded-full bg-[#7EC8E3]" />
                                     <span>Blue Trinket</span>
                                 </div>
-                                <span className="text-zinc-600">({wardCount} wards)</span>
+                                <span style={{ color: "rgba(200,168,75,0.3)" }}>({wardCount} wards)</span>
                             </>
                         )}
                         {layers.positions && (
@@ -535,8 +536,8 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                 </div>
 
                 {/* Right: Champion Selector */}
-                <div className="glass rounded-2xl p-4 border border-white/5 lg:w-[180px] space-y-3 h-fit">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Champions</div>
+                <div className="rounded-2xl p-4 lg:w-[180px] space-y-3 h-fit" style={{ background: "rgba(200,168,75,0.025)", border: "1px solid rgba(200,168,75,0.1)" }}>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.15em]" style={{ color: "rgba(200,168,75,0.5)" }}>Champions</div>
 
                     {/* All Players */}
                     <button
@@ -545,8 +546,9 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                             "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all",
                             selectedParticipant === null
                                 ? "bg-[#C8A84B] text-[#030308] shadow-lg shadow-[#C8A84B]/20"
-                                : "bg-white/5 text-zinc-500 hover:text-white"
+                                : "text-white/40 hover:text-white"
                         )}
+                        style={selectedParticipant !== null ? { background: "rgba(200,168,75,0.05)", border: "1px solid rgba(200,168,75,0.12)" } : {}}
                     >
                         <Users className="w-3.5 h-3.5" />
                         All Players
@@ -563,7 +565,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                                     "w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-all",
                                     selectedParticipant === p.participantId
                                         ? "bg-[#C8A84B]/15 border border-[#C8A84B]/40 shadow-[0_0_10px_rgba(200,168,75,0.15)]"
-                                        : "hover:bg-white/5 border border-transparent"
+                                        : "hover:bg-[rgba(200,168,75,0.06)] border border-transparent"
                                 )}
                             >
                                 <img
@@ -572,7 +574,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                                     className={cn("w-7 h-7 rounded-md border", selectedParticipant === p.participantId ? "border-[#C8A84B]" : "border-blue-500/20")}
                                     onError={(e) => { const img = e.currentTarget; if (!img.dataset.fallback) { img.dataset.fallback = "1"; img.src = "/logo.png"; } }}
                                 />
-                                <span className={cn("text-[11px] font-semibold truncate", selectedParticipant === p.participantId ? "text-white" : "text-zinc-400")}>
+                                <span className={cn("text-[11px] font-semibold truncate", selectedParticipant === p.participantId ? "text-white" : "")} style={selectedParticipant !== p.participantId ? { color: "rgba(200,168,75,0.5)" } : {}}>
                                     {p.championName}
                                 </span>
                             </button>
@@ -590,7 +592,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                                     "w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-all",
                                     selectedParticipant === p.participantId
                                         ? "bg-[#C8A84B]/15 border border-[#C8A84B]/40 shadow-[0_0_10px_rgba(200,168,75,0.15)]"
-                                        : "hover:bg-white/5 border border-transparent"
+                                        : "hover:bg-[rgba(200,168,75,0.06)] border border-transparent"
                                 )}
                             >
                                 <img
@@ -599,7 +601,7 @@ export function HeatmapVisualization({ heatmapData, ddragonVersion }: HeatmapVis
                                     className={cn("w-7 h-7 rounded-md border", selectedParticipant === p.participantId ? "border-[#C8A84B]" : "border-red-500/20")}
                                     onError={(e) => { const img = e.currentTarget; if (!img.dataset.fallback) { img.dataset.fallback = "1"; img.src = "/logo.png"; } }}
                                 />
-                                <span className={cn("text-[11px] font-semibold truncate", selectedParticipant === p.participantId ? "text-white" : "text-zinc-400")}>
+                                <span className={cn("text-[11px] font-semibold truncate", selectedParticipant === p.participantId ? "text-white" : "")} style={selectedParticipant !== p.participantId ? { color: "rgba(200,168,75,0.5)" } : {}}>
                                     {p.championName}
                                 </span>
                             </button>
