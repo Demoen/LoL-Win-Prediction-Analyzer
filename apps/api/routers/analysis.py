@@ -125,6 +125,9 @@ async def _compute_recent_lane_leads_at_minute(
 
         regional_routing = REGION_TO_ROUTING.get((platform_region or "").lower(), "europe")
 
+        # Throttle concurrent timeline API requests to avoid rate limiting
+        _timeline_sem = asyncio.Semaphore(3)
+
         async def _one(participant: Participant, match: Match):
             if match is None:
                 return None
@@ -163,7 +166,10 @@ async def _compute_recent_lane_leads_at_minute(
             if not enemy_pid:
                 return None
 
-            timeline = await riot_service.get_match_timeline(regional_routing, str(match_id))
+            timeline = None
+            async with _timeline_sem:
+                timeline = await riot_service.get_match_timeline(regional_routing, str(match_id))
+                await asyncio.sleep(1.2)
             if not timeline:
                 return None
 

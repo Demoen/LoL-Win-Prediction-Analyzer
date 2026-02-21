@@ -214,7 +214,7 @@ export default function Home() {
                 <img src="/logo.png" alt="NexusInsight" className="w-full h-full object-contain" />
               </div>
               <h2 className="text-lg font-black tracking-[0.12em] uppercase">
-                <span className="text-white/80">NEXUS</span>
+                <span style={{ color: "rgba(255,255,255,0.8)" }}>NEXUS</span>
                 <span className="text-[#C8A84B]">INSIGHT</span>
               </h2>
             </div>

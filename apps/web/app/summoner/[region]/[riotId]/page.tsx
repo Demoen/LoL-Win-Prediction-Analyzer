@@ -376,7 +376,7 @@ export default function Dashboard() {
                 <header className="h-20 sticky top-0 z-40 px-8 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(200,168,75,0.1)", background: "rgba(3,3,8,0.9)", backdropFilter: "blur(20px)" }}>
                     <div className="flex items-center gap-4">
                         <Link href="/" className="lg:hidden p-2 -ml-2 transition-colors" style={{ color: "rgba(200,168,75,0.5)" }}><ArrowLeft className="w-5 h-5" /></Link>
-                        <h1 className="text-xl font-bold uppercase tracking-widest hidden md:block" style={{ color: "#C8A84B" }}>NEXUS<span className="text-white">INSIGHT</span></h1>
+                        <h1 className="text-xl font-bold uppercase tracking-widest hidden md:block" style={{ color: "rgba(255,255,255,0.8)" }}>NEXUS<span style={{ color: "#C8A84B" }}>INSIGHT</span></h1>
                         <div className="h-6 w-px bg-white/10 hidden md:block"></div>
                         <div className="flex items-center gap-5">
                             <img src={profileIconUrl} className={cn("w-12 h-12 rounded-xl border-2 shadow-xl", rankConfig ? rankConfig.border : "border-zinc-700")} />

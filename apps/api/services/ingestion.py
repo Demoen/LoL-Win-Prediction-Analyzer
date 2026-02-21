@@ -93,6 +93,8 @@ class IngestionService:
                 details = await riot_service.get_match_details(routing, match_id)
                 await self.save_match(details)
                 new_matches.append(match_id)
+                # Delay between requests to avoid rate limiting
+                await asyncio.sleep(1.2)
             except NotFoundError:
                 logger.debug("Match %s not found, skipping", match_id)
             except RiotAPIError as e:
@@ -136,21 +138,27 @@ class IngestionService:
             yield {"current": total, "total": total, "status": "All matches already cached"}
             return
         
-        # Fetch match data in parallel; RiotService enforces a shared concurrency limit.
+        # Throttle concurrent API requests to avoid rate limiting.
+        _API_SEMAPHORE = asyncio.Semaphore(3)   # max 3 concurrent requests
+        _API_DELAY     = 1.2                     # seconds between requests
+
         async def fetch_match_data(match_id: str):
-            """Fetch match details (API only, no DB)."""
-            try:
-                details = await riot_service.get_match_details(routing, match_id)
-                return (match_id, details, None)
-            except NotFoundError:
-                logger.debug("Match %s not found", match_id)
-                return (match_id, None, "not found")
-            except RiotAPIError as e:
-                logger.error("Riot API error fetching match %s: %s", match_id, e)
-                return (match_id, None, str(e))
-            except Exception as e:
-                logger.error(f"Failed to fetch match {match_id}: {e}")
-                return (match_id, None, str(e))
+            """Fetch match details (API only, no DB), respecting rate limits."""
+            async with _API_SEMAPHORE:
+                try:
+                    details = await riot_service.get_match_details(routing, match_id)
+                    return (match_id, details, None)
+                except NotFoundError:
+                    logger.debug("Match %s not found", match_id)
+                    return (match_id, None, "not found")
+                except RiotAPIError as e:
+                    logger.error("Riot API error fetching match %s: %s", match_id, e)
+                    return (match_id, None, str(e))
+                except Exception as e:
+                    logger.error(f"Failed to fetch match {match_id}: {e}")
+                    return (match_id, None, str(e))
+                finally:
+                    await asyncio.sleep(_API_DELAY)
 
         tasks = [asyncio.create_task(fetch_match_data(mid)) for mid in new_match_ids]
 

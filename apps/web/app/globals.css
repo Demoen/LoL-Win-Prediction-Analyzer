@@ -7,6 +7,7 @@
   --color-secondary: #00D1FF;
   --color-accent: #00ffd5;
   --color-card-dark: #161618;
+  --color-white: #ffd770;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
