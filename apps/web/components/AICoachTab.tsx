@@ -479,7 +479,7 @@ Be direct, analytical, and unfiltered. Reference specific stats.`;
                             <p className="text-xs font-bold uppercase tracking-widest mt-0.5" style={{ color: "rgba(200,168,75,0.4)" }}>AI-Powered Deep Analysis · Professional Coaching</p>
                         </div>
                         <div className="ml-auto hidden md:block px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest" style={{ background: "rgba(200,168,75,0.08)", border: "1px solid rgba(200,168,75,0.2)", color: "rgba(200,168,75,0.6)" }}>
-                            Powered by OpenAI
+                            Powered by riotskillissue
                         </div>
                     </div>
                     <p className="text-xs mb-8" style={{ color: "rgba(200,168,75,0.4)" }}>
@@ -586,7 +586,7 @@ Be direct, analytical, and unfiltered. Reference specific stats.`;
                         <div className="flex items-center justify-between px-8 py-4" style={{ background: "rgba(200,168,75,0.03)" }}>
                             <div className="flex items-center gap-3">
                                 <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: "#4ade80", boxShadow: "0 0 8px rgba(74,222,128,0.6)" }} />
-                                <span className="text-xs font-black uppercase tracking-widest" style={{ color: "rgba(200,168,75,0.6)" }}>GPT-4o Coach Analysis</span>
+                                <span className="text-xs font-black uppercase tracking-widest" style={{ color: "rgba(200,168,75,0.6)" }}>AI Coach Analysis</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
