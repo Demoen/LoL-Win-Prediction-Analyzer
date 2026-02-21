@@ -422,6 +422,12 @@ export function DetailedMatchAnalysis({
                                                     <span className="text-white font-mono">{typeof area.current === 'number' ? area.current.toFixed(1) : area.current}</span>
                                                 </div>
                                                 <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "rgba(200,168,75,0.08)" }}>
+                                                    {(() => {
+                                                        const maxVal = Math.max(Number(area.current) || 0, Number(area.target) || 0, 1);
+                                                        const pct = toBarPct(area.current, maxVal);
+                                                        return <div className="h-full bg-[#C8A84B]/60" style={{ width: `${pct}%` }}></div>;
+                                                    })()}
+                                                </div>
                                             </div>
 
                                             {/* Enemy */}
