@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+@theme inline {
+  --color-background: #0a0a0f;
+  --color-foreground: #ededed;
+  --color-primary: #5842F4;
+  --color-secondary: #00D1FF;
+  --color-accent: #00ffd5;
+  --color-card-dark: #161618;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
 :root {
   --background: #0a0a0f;
   --foreground: #ededed;
@@ -7,6 +18,14 @@
   --secondary: #00D1FF;
   --accent: #00ffd5;
   --card-dark: #161618;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @layer utilities {
@@ -31,26 +50,6 @@
       radial-gradient(at 0% 0%, hsla(253, 16%, 7%, 1) 0, transparent 50%),
       radial-gradient(at 50% 0%, hsla(225, 39%, 30%, 0.2) 0, transparent 50%),
       radial-gradient(at 100% 0%, hsla(180, 100%, 50%, 0.1) 0, transparent 50%);
-  }
-
-
-  @theme inline {
-    --color-background: var(--background);
-    --color-foreground: var(--foreground);
-    --color-primary: var(--primary);
-    --color-secondary: var(--secondary);
-    --color-accent: var(--accent);
-    --color-card-dark: var(--card-dark);
-    --font-sans: var(--font-geist-sans);
-    --font-mono: var(--font-geist-mono);
-  }
-
-  body {
-    background: var(--background);
-    color: var(--foreground);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
   }
 
   /* Custom Scrollbar */
