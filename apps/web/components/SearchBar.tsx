@@ -76,14 +76,14 @@ export function SearchBar({
                 <div className="flex-1 relative group">
                     {/* Background with angular clip - absolute positioned */}
                     <div
-                        className="absolute inset-0 bg-[#0a0a12]/80 border border-[#00D1FF]/20 backdrop-blur-sm transition-all duration-300 group-hover:border-[#00D1FF]/40 group-focus-within:border-[#00D1FF]/50 group-focus-within:shadow-[0_0_20px_-5px_rgba(0,209,255,0.3)]"
+                        className="absolute inset-0 bg-[#08060a]/85 border border-[#C8A84B]/20 backdrop-blur-sm transition-all duration-300 group-hover:border-[#C8A84B]/40 group-focus-within:border-[#C8A84B]/60 group-focus-within:shadow-[0_0_25px_-5px_rgba(200,168,75,0.25)]"
                         style={{ clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))" }}
                     ></div>
 
                     {/* Content container - no clip path, allows dropdown overflow */}
                     <div className="relative flex items-center px-4 h-14 z-10">
                         {/* Search Icon */}
-                        <Search className="w-5 h-5 text-[#00D1FF]/60 mr-3 flex-shrink-0" />
+                        <Search className="w-5 h-5 text-[#C8A84B]/60 mr-3 flex-shrink-0" />
 
                         {/* Input */}
                         <input
@@ -95,14 +95,14 @@ export function SearchBar({
                         />
 
                         {/* Divider */}
-                        <div className="w-px h-6 bg-[#00D1FF]/20 mx-3 flex-shrink-0"></div>
+                        <div className="w-px h-6 bg-[#C8A84B]/20 mx-3 flex-shrink-0"></div>
 
                         {/* Region Selector */}
                         <div className="relative flex-shrink-0" ref={dropdownRef}>
                             <button
                                 type="button"
                                 onClick={() => setIsRegionOpen(!isRegionOpen)}
-                                className="flex items-center gap-1.5 px-2 py-1.5 text-slate-400 hover:text-[#00D1FF] transition-colors font-semibold text-sm uppercase tracking-wide"
+                                className="flex items-center gap-1.5 px-2 py-1.5 text-slate-400 hover:text-[#C8A84B] transition-colors font-semibold text-sm uppercase tracking-wide"
                             >
                                 <span>{selectedRegion.label}</span>
                                 <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-200", isRegionOpen ? "rotate-180" : "")} />
@@ -111,7 +111,7 @@ export function SearchBar({
                             {/* Dropdown Menu */}
                             {isRegionOpen && (
                                 <div
-                                    className="absolute right-0 top-full mt-2 w-56 bg-[#0a0a12] border border-[#00D1FF]/20 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] py-1 z-[100]"
+                                    className="absolute right-0 top-full mt-2 w-56 bg-[#08060a] border border-[#C8A84B]/20 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.9)] py-1 z-[100]"
                                     style={{ clipPath: "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))" }}
                                 >
                                     <div className="max-h-64 overflow-y-auto custom-scrollbar">
@@ -123,17 +123,17 @@ export function SearchBar({
                                                     setRegion(r.id);
                                                     setIsRegionOpen(false);
                                                 }}
-                                                className="w-full text-left px-3 py-2 hover:bg-[#00D1FF]/10 flex items-center justify-between group/item transition-all"
+                                                className="w-full text-left px-3 py-2 hover:bg-[#C8A84B]/10 flex items-center justify-between group/item transition-all"
                                             >
                                                 <div className="flex flex-col">
-                                                    <span className={cn("font-semibold text-sm transition-colors", region === r.id ? "text-[#00D1FF]" : "text-slate-400 group-hover/item:text-white")}>
+                                                    <span className={cn("font-semibold text-sm transition-colors", region === r.id ? "text-[#C8A84B]" : "text-slate-400 group-hover/item:text-white")}>
                                                         {r.label}
                                                     </span>
                                                     <span className="text-[10px] text-slate-600 uppercase tracking-wider">
                                                         {r.name}
                                                     </span>
                                                 </div>
-                                                {region === r.id && <Check className="w-3.5 h-3.5 text-[#00D1FF]" />}
+                                                {region === r.id && <Check className="w-3.5 h-3.5 text-[#C8A84B]" />}
                                             </button>
                                         ))}
                                     </div>
@@ -147,7 +147,7 @@ export function SearchBar({
                 <button
                     type="submit"
                     disabled={loading || !riotId.trim()}
-                    className="ml-2 bg-gradient-to-r from-[#00D1FF] to-[#00B4E0] text-[#050510] hover:from-[#00E5FF] hover:to-[#00D1FF] disabled:opacity-40 disabled:cursor-not-allowed px-6 h-14 font-bold text-sm uppercase tracking-wider transition-all duration-300 flex items-center gap-2 active:scale-[0.98]"
+                    className="ml-2 bg-[#C8A84B] text-[#030308] hover:bg-[#FFD870] hover:shadow-[0_0_30px_-6px_rgba(200,168,75,0.8)] disabled:opacity-30 disabled:cursor-not-allowed px-6 h-14 font-black text-sm uppercase tracking-[0.15em] transition-all duration-300 flex items-center gap-2 active:scale-[0.97]"
                     style={{ clipPath: "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)" }}
                 >
                     {loading ? (

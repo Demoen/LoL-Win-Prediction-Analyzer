@@ -280,6 +280,64 @@
     animation: rune-glow 2s ease-in-out infinite;
   }
 
+  /* ── Command Center Additions ─────────────────────────── */
+
+  @keyframes fade-in-up {
+    0% {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+    opacity: 0;
+  }
+
+  @keyframes ticker-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .animate-ticker {
+    animation: ticker-scroll 30s linear infinite;
+    will-change: transform;
+  }
+  .animate-ticker:hover {
+    animation-play-state: paused;
+  }
+
+  @keyframes spin-xl {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+
+  @keyframes spin-xl-rev {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(-360deg); }
+  }
+
+  .animate-spin-xl {
+    animation: spin-xl 40s linear infinite;
+  }
+
+  .animate-spin-xl-rev {
+    animation: spin-xl-rev 28s linear infinite;
+  }
+
+  @keyframes shimmer-sweep {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(300%); }
+  }
+
+  @keyframes duration-1500 { }
+  .transition-opacity { transition-property: opacity; }
+  .duration-1500 { transition-duration: 1500ms; }
+
   /* Glassmorphism */
   .glass {
     background: rgba(255, 255, 255, 0.03);
