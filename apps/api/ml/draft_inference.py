@@ -262,6 +262,16 @@ class DraftAnalyzer:
             base_user_prob = base_prob if user_side == "blue" else 1.0 - base_prob
             delta = user_prob - base_user_prob
 
+            # The model was trained on full/near-full 5v5 drafts.  With very few
+            # picks it extrapolates far outside its training distribution, producing
+            # delta values that look large but are just noise.  Scale the displayed
+            # delta by a reliability factor that grows from 0 (nothing picked) to 1
+            # (8+ champions already on both sides combined), so early-draft deltas
+            # are shown as near-zero instead of misleadingly large.
+            total_context = len(ally_champs) + len(enemy_champs)
+            reliability = min(1.0, total_context / 8.0)
+            displayed_delta = delta * reliability
+
             # Synergy score with allies
             syn_score = self._synergy_score(cid, ally_champs)
             # Counter score against enemies
@@ -275,7 +285,7 @@ class DraftAnalyzer:
                 "id": cid,
                 "name": self.champion_names.get(cid, f"Champion_{cid}"),
                 "win_probability": round(user_prob * 100, 1),
-                "win_delta": round(delta * 100, 1),
+                "win_delta": round(displayed_delta * 100, 1),
                 "synergy_score": round(syn_score, 3),
                 "counter_score": round(cnt_score, 3),
                 "base_win_rate": round(stats.get("win_rate", 0.5) * 100, 1),
