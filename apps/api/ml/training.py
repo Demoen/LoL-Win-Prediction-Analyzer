@@ -225,8 +225,10 @@ class WinPredictionModel:
             
             diff = win_means - loss_means
             # percent_difference: avoid div-by-zero, replace NaN/Inf with 0
+            safe_loss = loss_means.to_numpy(dtype=float, copy=True)
+            safe_loss[safe_loss == 0] = np.nan
             with np.errstate(divide='ignore', invalid='ignore'):
-                pct = np.where(loss_means != 0, diff / loss_means * 100, 0.0)
+                pct = diff.to_numpy(dtype=float) / safe_loss * 100
             pct = np.where(np.isfinite(pct), pct, 0.0)
             
             for i, feature in enumerate(available):
