@@ -4,6 +4,7 @@ Draft analysis API router — champion list + real-time draft analysis.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -158,10 +159,10 @@ async def get_champions():
     """Return all champions with stats and DDragon icon URLs."""
     _ensure_loaded()
     version = await get_ddragon_version()
-    champs = draft_analyzer.get_champion_list()
-    result = []
-    for c in champs:
-        result.append(
+
+    def _build_champion_list():
+        champs = draft_analyzer.get_champion_list()
+        return [
             ChampionInfo(
                 id=c["id"],
                 name=c["name"],
@@ -172,7 +173,10 @@ async def get_champions():
                 primary_role=c.get("primary_role", ""),
                 viable_roles=c.get("viable_roles", []),
             )
-        )
+            for c in champs
+        ]
+
+    result = await asyncio.to_thread(_build_champion_list)
     return ChampionListResponse(champions=result, ddragon_version=version)
 
 
@@ -182,7 +186,7 @@ async def analyze_draft(req: DraftAnalyzeRequest):
     _ensure_loaded()
     version = await get_ddragon_version()
 
-    # Validate champion IDs
+    # Validate champion IDs (fast path — checked before spawning a thread)
     valid_ids = set(draft_analyzer.champion_ids)
     for cid in req.blue_champions + req.red_champions + req.banned_champions:
         if cid not in valid_ids:
@@ -191,88 +195,95 @@ async def analyze_draft(req: DraftAnalyzeRequest):
                 detail=f"Unknown champion ID: {cid}",
             )
 
-    # Determine ally / enemy from user perspective
-    if req.user_side == "blue":
-        ally = req.blue_champions
-        enemy = req.red_champions
-    else:
-        ally = req.red_champions
-        enemy = req.blue_champions
+    # -------------------------------------------------------------------
+    # All CPU-bound work runs inside a thread so the event loop stays free
+    # to serve other requests concurrently.
+    # -------------------------------------------------------------------
+    def _compute() -> DraftAnalyzeResponse:
+        # Determine ally / enemy from user perspective
+        if req.user_side == "blue":
+            ally = req.blue_champions
+            enemy = req.red_champions
+        else:
+            ally = req.red_champions
+            enemy = req.blue_champions
 
-    # The side currently picking (may be the opponent's turn)
-    # If not supplied, default to user's side
-    picking_side = req.picking_side if req.picking_side and req.picking_side != "ban" else req.user_side
+        # The side currently picking (may be the opponent's turn)
+        # If not supplied, default to user's side
+        picking_side = req.picking_side if req.picking_side and req.picking_side != "ban" else req.user_side
 
-    # Determine which team is actively picking right now
-    if picking_side == "blue":
-        active_ally = req.blue_champions
-        active_enemy = req.red_champions
-    else:
-        active_ally = req.red_champions
-        active_enemy = req.blue_champions
+        # Determine which team is actively picking right now
+        if picking_side == "blue":
+            active_ally = req.blue_champions
+            active_enemy = req.red_champions
+        else:
+            active_ally = req.red_champions
+            active_enemy = req.blue_champions
 
-    # Win probability (from user's perspective)
-    blue_prob = draft_analyzer.predict_win_probability(
-        req.blue_champions, req.red_champions
-    )
-    user_win_prob = blue_prob if req.user_side == "blue" else 1.0 - blue_prob
-
-    # Suggested picks — always for the side that is CURRENTLY picking
-    picks_raw = draft_analyzer.suggest_best_picks(
-        active_ally, active_enemy, req.banned_champions, picking_side, top_n=8
-    )
-    suggested_picks = [
-        PickSuggestion(
-            icon_url=_icon_url(p["name"], version),
-            **p,
+        # Win probability (from user's perspective)
+        blue_prob = draft_analyzer.predict_win_probability(
+            req.blue_champions, req.red_champions
         )
-        for p in picks_raw
-    ]
+        user_win_prob = blue_prob if req.user_side == "blue" else 1.0 - blue_prob
 
-    # Suggested bans — always for the side that is CURRENTLY banning
-    # (use active picking side so ban suggestions are relevant)
-    bans_raw = draft_analyzer.suggest_bans(
-        active_ally, active_enemy, req.banned_champions, picking_side, top_n=8
-    )
-    suggested_bans = [
-        BanSuggestion(
-            icon_url=_icon_url(b["name"], version),
-            **b,
+        # Suggested picks — always for the side that is CURRENTLY picking
+        picks_raw = draft_analyzer.suggest_best_picks(
+            active_ally, active_enemy, req.banned_champions, picking_side, top_n=8
         )
-        for b in bans_raw
-    ]
+        suggested_picks = [
+            PickSuggestion(
+                icon_url=_icon_url(p["name"], version),
+                **p,
+            )
+            for p in picks_raw
+        ]
 
-    # Synergy details — always for the currently-active team
-    synergies: list[SynergyDetail] = []
-    for cid in active_ally:
-        others = [a for a in active_ally if a != cid]
-        if others:
-            syn = draft_analyzer.get_synergies(cid, others)
-            synergies.extend([SynergyDetail(**s) for s in syn])
+        # Suggested bans — always for the side that is CURRENTLY banning
+        # (use active picking side so ban suggestions are relevant)
+        bans_raw = draft_analyzer.suggest_bans(
+            active_ally, active_enemy, req.banned_champions, picking_side, top_n=8
+        )
+        suggested_bans = [
+            BanSuggestion(
+                icon_url=_icon_url(b["name"], version),
+                **b,
+            )
+            for b in bans_raw
+        ]
 
-    # Counter details — for the currently-active team vs their enemy
-    counters_list: list[CounterDetail] = []
-    for cid in active_ally:
-        if active_enemy:
-            cnt = draft_analyzer.get_counters(cid, active_enemy)
-            counters_list.extend([CounterDetail(**c) for c in cnt])
+        # Synergy details — always for the currently-active team
+        synergies: list[SynergyDetail] = []
+        for cid in active_ally:
+            others = [a for a in active_ally if a != cid]
+            if others:
+                syn = draft_analyzer.get_synergies(cid, others)
+                synergies.extend([SynergyDetail(**s) for s in syn])
 
-    # Role assignments (always shown from both teams' perspective)
-    ally_role_assignments = draft_analyzer.get_team_role_assignments(active_ally)
-    enemy_role_assignments = draft_analyzer.get_team_role_assignments(active_enemy)
-    unfilled = list(draft_analyzer._get_unfilled_roles(active_ally))
+        # Counter details — for the currently-active team vs their enemy
+        counters_list: list[CounterDetail] = []
+        for cid in active_ally:
+            if active_enemy:
+                cnt = draft_analyzer.get_counters(cid, active_enemy)
+                counters_list.extend([CounterDetail(**c) for c in cnt])
 
-    return DraftAnalyzeResponse(
-        win_probability=round(user_win_prob * 100, 1),
-        suggested_picks=suggested_picks,
-        suggested_bans=suggested_bans,
-        synergies=synergies,
-        counters=counters_list,
-        ally_roles=[RoleAssignment(**r) for r in ally_role_assignments],
-        enemy_roles=[RoleAssignment(**r) for r in enemy_role_assignments],
-        unfilled_roles=unfilled,
-        ddragon_version=version,
-    )
+        # Role assignments (always shown from both teams' perspective)
+        ally_role_assignments = draft_analyzer.get_team_role_assignments(active_ally)
+        enemy_role_assignments = draft_analyzer.get_team_role_assignments(active_enemy)
+        unfilled = list(draft_analyzer._get_unfilled_roles(active_ally))
+
+        return DraftAnalyzeResponse(
+            win_probability=round(user_win_prob * 100, 1),
+            suggested_picks=suggested_picks,
+            suggested_bans=suggested_bans,
+            synergies=synergies,
+            counters=counters_list,
+            ally_roles=[RoleAssignment(**r) for r in ally_role_assignments],
+            enemy_roles=[RoleAssignment(**r) for r in enemy_role_assignments],
+            unfilled_roles=unfilled,
+            ddragon_version=version,
+        )
+
+    return await asyncio.to_thread(_compute)
 
 
 def _ensure_loaded() -> None:

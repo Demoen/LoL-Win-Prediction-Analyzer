@@ -48,7 +48,9 @@ class DraftAnalyzer:
             return
 
         # Model — XGBoost native format (.ubj), Python-version independent
-        self.model = XGBClassifier()
+        # nthread=1 prevents XGBoost from spawning its own OpenMP thread pool per
+        # prediction call; with asyncio.to_thread we handle concurrency ourselves.
+        self.model = XGBClassifier(nthread=1)
         self.model.load_model(str(MODEL_PATH))
 
         # Champion index metadata

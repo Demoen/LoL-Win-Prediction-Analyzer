@@ -2,12 +2,24 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import analysis, draft
 import os
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 from init_db import init_models
+
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_models()
+    # Eager-load the draft model in a thread so the event loop stays free
+    # and the very first /draft request is not slow for users.
+    from ml.draft_inference import draft_analyzer
+    try:
+        await asyncio.to_thread(draft_analyzer.load)
+        logger.info("Draft model loaded at startup.")
+    except Exception as exc:
+        logger.warning("Draft model could not be pre-loaded at startup: %s", exc)
     yield
     # Gracefully close the Riot API client on shutdown
     from services.riot import riot_service
