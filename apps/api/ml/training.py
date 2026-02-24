@@ -1,7 +1,5 @@
-"""
-Advanced Win Prediction Model using XGBoost with Probability Calibration
-Refactored to use PREDICTIVE features (not outcome-correlated stats).
-"""
+"""Win prediction model using XGBoost with probability calibration."""
+import math
 import numpy as np
 import pandas as pd
 from xgboost import XGBClassifier
@@ -10,6 +8,108 @@ from .pipeline import PREDICTIVE_FEATURES, DISPLAY_FEATURES, ALL_FEATURES, prepa
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _build_recency_weights(n: int) -> np.ndarray:
+    """Build sample-weight vector: most-recent=4, next-4=2, rest=1."""
+    w = np.ones(n)
+    w[1:min(5, n)] = 2.0
+    w[0] = 4.0
+    return w
+
+
+# ---------- constant maps (avoid re-creating dicts every call) ----------
+
+_RAW_FEATURE_MAP = {
+    'visionScoreAdvantageLaneOpponent': 'visionScore',
+    'maxCsAdvantageOnLaneOpponent': 'totalMinionsKilled',
+    'earlyLaningPhaseGoldExpAdvantage': 'goldPerMinute',
+    'laningPhaseGoldExpAdvantage': 'goldPerMinute',
+    'maxLevelLeadLaneOpponent': 'xpPerMinute',
+}
+
+_PRIORITY_WEIGHTS = {
+    # High priority — laning fundamentals
+    'earlyLaningPhaseGoldExpAdvantage': 1.6,
+    'laningPhaseGoldExpAdvantage': 1.6,
+    'maxCsAdvantageOnLaneOpponent': 1.5,
+    'maxLevelLeadLaneOpponent': 1.5,
+    'laneMinionsFirst10Minutes': 1.4,
+    'turretPlatesTaken': 1.4,
+    'skillshotHitRate': 1.3,
+    'skillshotDodgeRate': 1.3,
+    'visionScoreAdvantageLaneOpponent': 1.2,
+    # Medium priority
+    'damageDealtToChampions': 1.0,
+    'goldPerMinute': 1.0,
+    'soloKills': 1.0,
+    'aggressionScore': 1.0,
+    'totalMinionsKilled': 1.0,
+    'killParticipation': 1.0,
+    # Low priority — vision habits
+    'wardsPlaced': 0.5,
+    'controlWardsPlaced': 0.5,
+    'controlWardTimeCoverageInRiverOrEnemyHalf': 0.5,
+    'detectorWardsPlaced': 0.5,
+    'visionScore': 0.5,
+    # Very low priority — pings
+    'enemyMissingPings': 0.1,
+    'onMyWayPings': 0.1,
+    'assistMePings': 0.1,
+    'getBackPings': 0.1,
+}
+
+_DRIVER_NAMES_MAP = {
+    'visionScore': 'Vision Control',
+    'goldPerMinute': 'Economy',
+    'damageDealtToChampions': 'Combat Output',
+    'killParticipation': 'Teamfighting',
+    'towerDamageDealt': 'Objective Pressure',
+    'totalMinionsKilled': 'Farming',
+    'xpPerMinute': 'Experience Gain',
+    'earlyLaningPhaseGoldExpAdvantage': 'Early Gold Lead',
+    'laningPhaseGoldExpAdvantage': 'Mid-Game Gold Lead',
+    'maxCsAdvantageOnLaneOpponent': 'CS Dominance',
+    'maxLevelLeadLaneOpponent': 'Level Advantage',
+    'visionScoreAdvantageLaneOpponent': 'Vision Gap',
+    'laneMinionsFirst10Minutes': 'Early Farming',
+    'turretPlatesTaken': 'Tower Aggression',
+    'skillshotHitRate': 'Skill Accuracy',
+    'skillshotDodgeRate': 'Dodge Skill',
+    'wardsPlaced': 'Warding Habit',
+    'controlWardsPlaced': 'Control Ward Usage',
+    'controlWardTimeCoverageInRiverOrEnemyHalf': 'Deep Vision',
+    'enemyMissingPings': 'Map Awareness',
+    'soloKills': 'Solo Kill Pressure',
+    'aggressionScore': 'Aggression',
+    'visionDominance': 'Vision Dominance',
+    'jungleInvasionPressure': 'Invasion Pressure',
+}
+
+_SKILL_FOCUS_NAME_MAP = {
+    'visionScore': {'title': 'Vision Control', 'desc': 'Place more wards and clear enemy vision.'},
+    'visionScoreAdvantageLaneOpponent': {'title': 'Vision Gap', 'desc': 'Your opponent is out-visioning you.'},
+    'wardsPlaced': {'title': 'Wards Placed', 'desc': 'Use your trinket more often.'},
+    'controlWardsPlaced': {'title': 'Control Wards', 'desc': 'Buy and place pink wards to deny vision.'},
+    'controlWardTimeCoverageInRiverOrEnemyHalf': {'title': 'Deep Vision', 'desc': 'Place control wards further up for better info.'},
+    'goldPerMinute': {'title': 'Farming & Economy', 'desc': 'Improve CSing and look for more resource efficient rotations.'},
+    'totalMinionsKilled': {'title': 'CS Numbers', 'desc': 'Focus on last hitting minions.'},
+    'laneMinionsFirst10Minutes': {'title': 'Early Farm (10m)', 'desc': 'Practice last hitting in the early laning phase.'},
+    'earlyLaningPhaseGoldExpAdvantage': {'title': 'Early Gold Lead', 'desc': 'Work on winning the first 8 minutes of lane.'},
+    'laningPhaseGoldExpAdvantage': {'title': 'Lane Gold Lead', 'desc': 'Focus on building a lead by 14 minutes.'},
+    'maxCsAdvantageOnLaneOpponent': {'title': 'CS Gap', 'desc': 'Deny enemy CS while securing your own.'},
+    'turretPlatesTaken': {'title': 'Turret Plates', 'desc': 'Push for plates when opponents recall or roam.'},
+    'killParticipation': {'title': 'Map Presence', 'desc': 'Roam more often to assist your team.'},
+    'damageDealtToChampions': {'title': 'Damage Output', 'desc': 'Look for more safe trading opportunities.'},
+    'kda': {'title': 'Survival', 'desc': 'Play safer and avoid unnecessary deaths.'},
+    'skillshotHitRate': {'title': 'Skill Accuracy', 'desc': 'Practice hitting your skillshots consistently.'},
+    'skillshotDodgeRate': {'title': 'Dodge Skill', 'desc': 'Focus on sidestepping enemy abilities.'},
+    'maxLevelLeadLaneOpponent': {'title': 'Level Lead', 'desc': 'Soak XP and deny enemy recall timings.'},
+    'enemyMissingPings': {'title': 'Missing Pings', 'desc': 'Ping missing when your laner roams.'},
+    'onMyWayPings': {'title': 'Roam Communication', 'desc': 'Ping on my way when moving to help.'},
+    'assistMePings': {'title': 'Help Requests', 'desc': 'Ask for help before getting dove.'},
+    'getBackPings': {'title': 'Danger Pings', 'desc': 'Warn teammates of incoming danger.'},
+}
 
 
 def to_native(obj):
@@ -27,18 +127,12 @@ def to_native(obj):
     return obj
 
 
-# Use predictive features for training (legacy compatibility)
 FEATURE_COLUMNS = PREDICTIVE_FEATURES
 
 
 class WinPredictionModel:
-    """
-    XGBoost-based win prediction model with:
-    - Gradient boosting (better than Random Forest per research)
-    - Probability calibration (Platt scaling)
-    - Weighted recent performance (most recent games matter more)
-    - PREDICTIVE features (not outcome-correlated stats)
-    """
+    """XGBoost-based win prediction model with probability calibration
+    and weighted recent performance."""
     
     def __init__(self):
         self.base_model = XGBClassifier(
@@ -49,55 +143,62 @@ class WinPredictionModel:
             eval_metric='logloss',
             random_state=42
         )
-        self.model = None  # Will be calibrated model after training
+        self.model = None
         self.is_trained = False
         self.trained_df = None
-        
-        # Use refactored predictive feature categories
+        self.cached_metrics = None
+        self._training_cache_key = None
+
         self.feature_categories = get_feature_categories()
+    
+    def _get_data_cache_key(self, df: pd.DataFrame) -> str:
+        """Generate a cache key based on dataframe content to detect changes."""
+        if df.empty:
+            return ""
+        key_parts = [
+            str(len(df)),
+            str(df['gameCreation'].iloc[0]) if 'gameCreation' in df.columns else "0",
+            str(df['gameCreation'].iloc[-1]) if 'gameCreation' in df.columns else "0",
+            str(int(df['win'].sum())) if 'win' in df.columns else "0"
+        ]
+        return "|".join(key_parts)
         
     def train(self, df: pd.DataFrame):
         """Train the model with weighted recent performance."""
         if df.empty or len(df) < 5:
             return {"error": "Not enough data (need at least 5 matches)"}
+        
+        # Check if we can skip retraining (same data as before)
+        cache_key = self._get_data_cache_key(df)
+        if cache_key and cache_key == self._training_cache_key and self.cached_metrics:
+            return self.cached_metrics
             
+        logger.info("Training model with new data (key: %s)", cache_key)
+        
         X = prepare_features(df)
         y = df['win']
         
-        # Sample weights: prioritize recent games (research-backed)
-        n_matches = len(df)
-        weights = np.array([
-            4.0 if i == 0 else 2.0 if i < 5 else 1.0 
-            for i in range(n_matches)
-        ])
+        # Sample weights: prioritize recent games
+        weights = _build_recency_weights(len(df))
         
-        # Train base XGBoost model with weights
+        # Train base XGBoost model
         self.base_model.fit(X, y, sample_weight=weights)
         
-        # Calibrate probabilities (Platt scaling) for well-calibrated outputs
-        # We use a simple approach since we have limited data
         try:
             self.model = CalibratedClassifierCV(self.base_model, method='sigmoid', cv=3)
             self.model.fit(X, y, sample_weight=weights)
         except Exception:
-            # Fallback to uncalibrated if not enough data for CV
             self.model = self.base_model
             
         self.is_trained = True
         self.trained_df = df
-        
-        # Calculate metrics
-        return self._calculate_metrics(df, X, y)
+        self._training_cache_key = cache_key
+
+        self.cached_metrics = self._calculate_metrics(df, X, y)
+        return self.cached_metrics
     
     def _calculate_metrics(self, df: pd.DataFrame, X: pd.DataFrame, y: pd.Series):
         """Calculate training metrics and insights."""
-        import math
-        
-        def safe_float(val):
-            """Convert to float, replacing NaN/Inf with 0."""
-            f = float(val) if not pd.isna(val) else 0.0
-            return f if math.isfinite(f) else 0.0
-        
         # Feature importance from base model
         importances = self.base_model.feature_importances_
         feature_importance = dict(zip(FEATURE_COLUMNS, importances))
@@ -109,8 +210,7 @@ class WinPredictionModel:
             total = sum(feature_importance.get(f, 0) for f in features if f in feature_importance)
             category_importance[category] = total
         sorted_category = sorted(category_importance.items(), key=lambda x: x[1], reverse=True)
-        
-        # Win vs Loss analysis
+
         wins_df = df[df['win'] == 1]
         losses_df = df[df['win'] == 0]
         
@@ -118,21 +218,26 @@ class WinPredictionModel:
         top_differentiators = []
         
         if len(wins_df) > 0 and len(losses_df) > 0:
-            for feature in FEATURE_COLUMNS:
-                if feature in df.columns:
-                    avg_win = safe_float(wins_df[feature].mean())
-                    avg_loss = safe_float(losses_df[feature].mean())
-                    difference = avg_win - avg_loss
-                    percent_diff = (difference / avg_loss * 100) if avg_loss != 0 else 0.0
-                    # Ensure percent_diff is finite
-                    percent_diff = percent_diff if math.isfinite(percent_diff) else 0.0
-                    
-                    performance_insights[feature] = {
-                        'avg_when_winning': avg_win,
-                        'avg_when_losing': avg_loss,
-                        'difference': difference,
-                        'percent_difference': percent_diff
-                    }
+            # Vectorised: compute all feature means in one call each
+            available = [f for f in FEATURE_COLUMNS if f in df.columns]
+            win_means = wins_df[available].mean()
+            loss_means = losses_df[available].mean()
+            
+            diff = win_means - loss_means
+            # percent_difference: avoid div-by-zero, replace NaN/Inf with 0
+            with np.errstate(divide='ignore', invalid='ignore'):
+                pct = np.where(loss_means != 0, diff / loss_means * 100, 0.0)
+            pct = np.where(np.isfinite(pct), pct, 0.0)
+            
+            for i, feature in enumerate(available):
+                aw = float(win_means.iloc[i]) if math.isfinite(float(win_means.iloc[i])) else 0.0
+                al = float(loss_means.iloc[i]) if math.isfinite(float(loss_means.iloc[i])) else 0.0
+                performance_insights[feature] = {
+                    'avg_when_winning': aw,
+                    'avg_when_losing': al,
+                    'difference': float(diff.iloc[i]),
+                    'percent_difference': float(pct[i]),
+                }
             
             top_differentiators = sorted(
                 performance_insights.items(),
@@ -140,17 +245,13 @@ class WinPredictionModel:
                 reverse=True
             )[:10]
 
-        # Calculate Consistency Score (Inverse CV of Gold Per Minute)
         consistency_score = 0.0
         if not df.empty and 'goldPerMinute' in df.columns:
             gpm = pd.to_numeric(df['goldPerMinute'], errors='coerce').fillna(0)
             if gpm.mean() > 0:
                 cv = gpm.std() / gpm.mean()
-                # Score 0-100: 0 CV = 100 consistency, 0.5 CV = 0 consistency
                 consistency_score = max(0, min(100, (1.0 - (cv * 2)) * 100))
-        
-        
-        # Model accuracy
+
         try:
             accuracy = self.model.score(X, y) if self.model else 0
         except Exception:
@@ -169,58 +270,46 @@ class WinPredictionModel:
         })
     
     def calculate_weighted_averages(self, df: pd.DataFrame) -> dict:
-        """
-        Calculate weighted averages prioritizing recent games.
-        Most recent: 4x, games 2-5: 2x, older: 1x
-        """
-        import math
-        
+        """Calculate weighted averages prioritizing recent games."""
         if df.empty:
             return {}
             
-        n = len(df)
-        weights = np.array([4.0 if i == 0 else 2.0 if i < 5 else 1.0 for i in range(n)])
+        weights = _build_recency_weights(len(df))
+        
+        # Select only columns that exist, convert to numeric in bulk
+        available = [f for f in ALL_FEATURES if f in df.columns]
+        if not available:
+            return {}
+        
+        numeric = df[available].apply(pd.to_numeric, errors='coerce').fillna(0).values  # (n, m) array
+        # weighted average via matrix multiply: weights (n,) @ numeric (n, m) -> (m,)
+        w_sum = weights.sum()
+        avg_arr = weights @ numeric / w_sum
         
         weighted_averages = {}
-        # Use ALL_FEATURES (predictive + display) for UI display
-        for feature in ALL_FEATURES:
-            if feature in df.columns:
-                # Fix FutureWarning by explicitly converting to numeric before filling
-                series = pd.to_numeric(df[feature], errors='coerce')
-                val = float(np.average(series.fillna(0), weights=weights))
-                # Replace NaN/Inf with 0 for JSON compatibility
-                weighted_averages[feature] = val if math.isfinite(val) else 0.0
+        for i, feature in enumerate(available):
+            val = float(avg_arr[i])
+            weighted_averages[feature] = val if math.isfinite(val) else 0.0
         
         return weighted_averages
     
     def predict_win_probability(self, stats: dict) -> float:
         """Predict win probability from weighted average stats."""
         if not self.is_trained:
-            return 50.0  # Default 50% if not trained
-            
+            return 50.0
+
         df = pd.DataFrame([stats])
         X = prepare_features(df)
-        
-        # DEBUG: Print Win Prediction Inputs (User Request)
-        print(f"DEBUG: Win Prediction Input (Last Game Features):")
-        for col in X.columns:
-            val = X[col].values[0]
-            if val != 0:
-                print(f"  {col}: {val}")
-        
+
         try:
             proba = self.model.predict_proba(X)[0][1]
         except Exception:
             proba = self.base_model.predict_proba(X)[0][1]
             
-        return float(proba * 100)  # Return as percentage, ensure native float
-    
+        return float(proba * 100)
+
     def analyze_player_mood(self, df: pd.DataFrame) -> list:
-        """
-        Analyze last 3 matches to detect player's current 'mood'.
-        Returns list of fun/meme-like tags based on performance patterns.
-        Ported from legacy with all 31 mood patterns.
-        """
+        """Analyze last 3 matches to detect player mood patterns."""
         if df.empty:
             return []
         
@@ -231,39 +320,46 @@ class WinPredictionModel:
             return []
             
         moods = []
+
+        # Compute all numeric means in one vectorised call
+        _cols = [
+            'kda', 'win', 'deaths', 'kills', 'assists', 'visionScore',
+            'killParticipation', 'teamDamagePercentage', 'damageTakenOnTeamPercentage',
+            'soloKills', 'goldPerMinute', 'maxCsAdvantageOnLaneOpponent',
+            'damageDealtToObjectives', 'earlyLaningPhaseGoldExpAdvantage',
+            'laneMinionsFirst10Minutes', 'enemyMissingPings', 'controlWardsPlaced',
+            'totalHeal', 'timeCCingOthers',
+        ]
+        present = [c for c in _cols if c in recent.columns]
+        means = recent[present].mean()
         
-        # Calculate recent stats with safe gets
-        def safe_mean(col):
-            if col in recent.columns:
-                return recent[col].mean()
-            return 0
+        def _m(col: str) -> float:
+            return float(means[col]) if col in means.index else 0.0
         
-        avg_kda = safe_mean('kda') if 'kda' in recent.columns else (
-            (safe_mean('kills') + safe_mean('assists')) / max(safe_mean('deaths'), 1)
+        avg_kda = _m('kda') if 'kda' in recent.columns else (
+            (_m('kills') + _m('assists')) / max(_m('deaths'), 1)
         )
-        win_rate = safe_mean('win') * 100
-        avg_deaths = safe_mean('deaths')
-        avg_kills = safe_mean('kills')
-        avg_assists = safe_mean('assists')
-        avg_vision = safe_mean('visionScore')
-        avg_kp = safe_mean('killParticipation')
-        avg_damage_share = safe_mean('teamDamagePercentage')
-        avg_damage_taken_share = safe_mean('damageTakenOnTeamPercentage')
-        avg_solo_kills = safe_mean('soloKills')
-        avg_gold_min = safe_mean('goldPerMinute')
-        avg_cs_diff = safe_mean('maxCsAdvantageOnLaneOpponent')
-        avg_obj_damage = safe_mean('damageDealtToObjectives')
-        early_gold_adv = safe_mean('earlyLaningPhaseGoldExpAdvantage')
-        lane_minions = safe_mean('laneMinionsFirst10Minutes')
-        missing_pings = safe_mean('enemyMissingPings')
-        control_wards = safe_mean('controlWardsPlaced')
-        total_heal = safe_mean('totalHeal')
-        time_ccing = safe_mean('timeCCingOthers')
+        win_rate = _m('win') * 100
+        avg_deaths = _m('deaths')
+        avg_kills = _m('kills')
+        avg_assists = _m('assists')
+        avg_vision = _m('visionScore')
+        avg_kp = _m('killParticipation')
+        avg_damage_share = _m('teamDamagePercentage')
+        avg_damage_taken_share = _m('damageTakenOnTeamPercentage')
+        avg_solo_kills = _m('soloKills')
+        avg_gold_min = _m('goldPerMinute')
+        avg_cs_diff = _m('maxCsAdvantageOnLaneOpponent')
+        avg_obj_damage = _m('damageDealtToObjectives')
+        early_gold_adv = _m('earlyLaningPhaseGoldExpAdvantage')
+        lane_minions = _m('laneMinionsFirst10Minutes')
+        missing_pings = _m('enemyMissingPings')
+        control_wards = _m('controlWardsPlaced')
+        total_heal = _m('totalHeal')
+        time_ccing = _m('timeCCingOthers')
         objectives_stolen = recent['objectivesStolen'].sum() if 'objectivesStolen' in recent.columns else 0
         had_afk = recent['hadAfkTeammate'].sum() if 'hadAfkTeammate' in recent.columns else 0
-        
-        # --- MOOD DETECTION RULES (31 patterns from legacy) ---
-        
+
         # 1. Smurf Detected
         if win_rate == 100 and avg_kda > 5.0:
             moods.append({
@@ -549,99 +645,51 @@ class WinPredictionModel:
                 "advice": "Do something. Anything."
             })
         
-        # Deduplicate and return
+        # Deduplicate
         unique_moods = {m['title']: m for m in moods}
         return list(unique_moods.values())
 
     def get_win_driver_insights(self, df: pd.DataFrame, stats: dict, enemy_stats: dict = None) -> list:
-        """
-        Compare current game stats against enemy laner (or average winning stats if no enemy stats) to identify Win Drivers.
-        Returns a list of drivers sorted by impact.
-        """
+        """Compare current stats against enemy laner or historical averages to identify win drivers."""
         if not self.is_trained or df.empty:
             return []
 
-        # Get insights from training data for fallback or validation
-        training_insights = self._calculate_metrics(self.trained_df, prepare_features(self.trained_df), self.trained_df['win'])
+        # Use cached metrics
+        training_insights = self.cached_metrics or {}
         perf_insights = training_insights.get('performance_insights', {})
 
         drivers = []
-        
-        # Define some readable names map
-        names_map = {
-            'visionScore': 'Vision Control',
-            'goldPerMinute': 'Economy',
-            'damageDealtToChampions': 'Combat Output',
-            'killParticipation': 'Teamfighting',
-            'towerDamageDealt': 'Objective Pressure',
-            'totalMinionsKilled': 'Farming',
-            'xpPerMinute': 'Experience Gain',
-            'earlyLaningPhaseGoldExpAdvantage': 'Early Gold Lead',
-            'laningPhaseGoldExpAdvantage': 'Mid-Game Gold Lead',
-            'maxCsAdvantageOnLaneOpponent': 'CS Dominance',
-            'maxLevelLeadLaneOpponent': 'Level Advantage',
-            'visionScoreAdvantageLaneOpponent': 'Vision Gap',
-            'laneMinionsFirst10Minutes': 'Early Farming',
-            'turretPlatesTaken': 'Tower Aggression',
-            'skillshotHitRate': 'Skill Accuracy',
-            'skillshotDodgeRate': 'Dodge Skill',
-            'wardsPlaced': 'Warding Habit',
-            'controlWardsPlaced': 'Control Ward Usage',
-            'controlWardTimeCoverageInRiverOrEnemyHalf': 'Deep Vision',
-            'enemyMissingPings': 'Map Awareness',
-            'soloKills': 'Solo Kill Pressure',
-            'aggressionScore': 'Aggression',
-            'visionDominance': 'Vision Dominance',
-            'jungleInvasionPressure': 'Invasion Pressure',
-        }
 
-        feature_cols = FEATURE_COLUMNS # Use the predictive features
-
-        for feature in feature_cols:
+        for feature in FEATURE_COLUMNS:
              if feature in stats:
                 val = stats[feature]
                 if val is None: continue
                 
-                # Determine baseline: Enemy Laner > Average Winner
                 baseline = 0
                 baseline_source = "avg"
-                
+
                 if enemy_stats:
                     if feature in enemy_stats:
                         baseline = enemy_stats[feature]
                         baseline_source = "enemy"
                     else:
-                        continue # Strict Mode: Skip if we can't compare to enemy
+                        continue
                 elif feature in perf_insights:
                     baseline = perf_insights[feature]['avg_when_winning']
                 else:
                     continue
-                
-                # --- RAW STAT MAPPING ---
-                # For UI clarity, map "Advantage" stats to their raw counterparts
-                raw_map = {
-                    'visionScoreAdvantageLaneOpponent': 'visionScore',
-                    'maxCsAdvantageOnLaneOpponent': 'totalMinionsKilled',
-                    'earlyLaningPhaseGoldExpAdvantage': 'goldPerMinute', 
-                    'laningPhaseGoldExpAdvantage': 'goldPerMinute',
-                    'maxLevelLeadLaneOpponent': 'xpPerMinute'
-                }
 
                 display_val = val
                 display_baseline = baseline
-                
-                if feature in raw_map:
-                    raw_key = raw_map[feature]
+
+                if feature in _RAW_FEATURE_MAP:
+                    raw_key = _RAW_FEATURE_MAP[feature]
                     if raw_key in stats and enemy_stats and raw_key in enemy_stats:
                         display_val = stats[raw_key]
                         display_baseline = enemy_stats[raw_key]
-                        # Re-calculate diff based on raw stats for consistency
                         val = display_val
                         baseline = display_baseline
-                # ------------------------
-                
-                # Calculate difference
-                # If baseline is 0, handle carefully
+
                 if baseline == 0:
                     if val > 0:
                         diff_pct = 1.0 # 100% better
@@ -651,20 +699,15 @@ class WinPredictionModel:
                         diff_pct = 0.0
                 else:
                     diff_pct = (val - baseline) / abs(baseline)
-                    
-                # Filter logic: Only show positive drivers (better than baseline)
-                # For strictly positive stats (Gold), val > baseline
-                # For leads (Gold Diff), val > baseline.
-                
-                # Logic for "Good" performance
-                is_positive = diff_pct > 0.05 # At least 5% better
+
+                is_positive = diff_pct > 0.05
                 
                 if is_positive:
                     impact = "Low"
                     if diff_pct > 0.15: impact = "Medium"
                     if diff_pct > 0.4: impact = "High"
                     
-                    readable_name = names_map.get(feature, feature.replace('_', ' ').title())
+                    readable_name = _DRIVER_NAMES_MAP.get(feature, feature.replace('_', ' ').title())
                     
                     drivers.append({
                         "name": readable_name,
@@ -678,100 +721,39 @@ class WinPredictionModel:
 
         # Sort by diff_pct descending, weighted by category priority
         # Priority: Combat/Gold/Aggression > Vision/Pings
-        priority_weights = {
-            'damageDealtToChampions': 1.5,
-            'goldPerMinute': 1.5,
-            'soloKills': 1.5,
-            'aggressionScore': 1.5,
-            'totalMinionsKilled': 1.4,
-            'turretPlatesTaken': 1.4,
-            'earlyLaningPhaseGoldExpAdvantage': 1.4,
-            'laningPhaseGoldExpAdvantage': 1.4,
-            'killParticipation': 1.3,
-            
-            # Low Priority
-            'visionScore': 0.6,
-            'wardsPlaced': 0.5,
-            'controlWardsPlaced': 0.5,
-            'enemyMissingPings': 0.4,
-            'onMyWayPings': 0.4,
-            'assistMePings': 0.4,
-            'getBackPings': 0.4
-        }
-        
-        drivers.sort(key=lambda x: x['diff_pct'] * priority_weights.get(x['feature'], 1.0), reverse=True)
-        return drivers[:3] # Top 3
+        drivers.sort(key=lambda x: x['diff_pct'] * _PRIORITY_WEIGHTS.get(x['feature'], 1.0), reverse=True)
+        return drivers[:3]
 
     def get_skill_focus(self, df: pd.DataFrame, stats: dict, enemy_stats: dict = None) -> list:
-        """
-        Identify areas for improvement compared to enemy laner (or winning averages).
-        """
+        """Identify areas for improvement compared to enemy laner or winning averages."""
         if not self.is_trained or df.empty:
             return []
             
-        training_insights = self._calculate_metrics(self.trained_df, prepare_features(self.trained_df), self.trained_df['win'])
+        # Use cached metrics
+        training_insights = self.cached_metrics or {}
         perf_insights = training_insights.get('performance_insights', {})
         
         improvements = []
-        name_map = {
-             # Vision
-             'visionScore': {'title': 'Vision Control', 'desc': 'Place more wards and clear enemy vision.'},
-             'visionScoreAdvantageLaneOpponent': {'title': 'Vision Gap', 'desc': 'Your opponent is out-visioning you.'},
-             'wardsPlaced': {'title': 'Wards Placed', 'desc': 'Use your trinket more often.'},
-             'controlWardsPlaced': {'title': 'Control Wards', 'desc': 'Buy and place pink wards to deny vision.'},
-             'controlWardTimeCoverageInRiverOrEnemyHalf': {'title': 'Deep Vision', 'desc': 'Place control wards further up for better info.'},
-             
-             # Farming / Economy
-             'goldPerMinute': {'title': 'Farming & Economy', 'desc': 'Improve CSing and look for more resource efficient rotations.'},
-             'totalMinionsKilled': {'title': 'CS Numbers', 'desc': 'Focus on last hitting minions.'},
-             'laneMinionsFirst10Minutes': {'title': 'Early Farm (10m)', 'desc': 'Practice last hitting in the early laning phase.'},
-             'earlyLaningPhaseGoldExpAdvantage': {'title': 'Early Gold Lead', 'desc': 'Work on winning the first 8 minutes of lane.'},
-             'laningPhaseGoldExpAdvantage': {'title': 'Lane Gold Lead', 'desc': 'Focus on building a lead by 14 minutes.'},
-             'maxCsAdvantageOnLaneOpponent': {'title': 'CS Gap', 'desc': 'Deny enemy CS while securing your own.'},
-             'turretPlatesTaken': {'title': 'Turret Plates', 'desc': 'Push for plates when opponents recall or roam.'},
-             
-             # Combat / Mechanics
-             'killParticipation': {'title': 'Map Presence', 'desc': 'Roam more often to assist your team.'},
-             'damageDealtToChampions': {'title': 'Damage Output', 'desc': 'Look for more safe trading opportunities.'},
-             'kda': {'title': 'Survival', 'desc': 'Play safer and avoid unnecessary deaths.'},
-             'skillshotHitRate': {'title': 'Skill Accuracy', 'desc': 'Practice hitting your skillshots consistently.'},
-             'skillshotDodgeRate': {'title': 'Dodge Skill', 'desc': 'Focus on sidestepping enemy abilities.'},
-             'maxLevelLeadLaneOpponent': {'title': 'Level Lead', 'desc': 'Soak XP and deny enemy recall timings.'},
-             
-             # Communication
-             'enemyMissingPings': {'title': 'Missing Pings', 'desc': 'Ping missing when your laner roams.'},
-             'onMyWayPings': {'title': 'Roam Communication', 'desc': 'Ping on my way when moving to help.'},
-             'assistMePings': {'title': 'Help Requests', 'desc': 'Ask for help before getting dove.'},
-             'getBackPings': {'title': 'Danger Pings', 'desc': 'Warn teammates of incoming danger.'},
-        }
         
         for feature in FEATURE_COLUMNS:
              if feature in stats:
                 val = stats[feature]
                 
-                # Determine baseline: Enemy Laner > Average Winner
                 baseline = 0
                 baseline_source = "avg"
-                
+
                 if enemy_stats:
                     if feature in enemy_stats:
                          baseline = enemy_stats[feature]
                          baseline_source = "enemy"
                     else:
-                         continue # Strict Mode
+                         continue
                 elif feature in perf_insights:
                      baseline = perf_insights[feature]['avg_when_winning']
                 else:
                      continue
 
-                # --- RAW STAT MAPPING ---
-                raw_map = {
-                    'visionScoreAdvantageLaneOpponent': 'visionScore',
-                    'maxCsAdvantageOnLaneOpponent': 'totalMinionsKilled',
-                    'earlyLaningPhaseGoldExpAdvantage': 'goldPerMinute', 
-                    'laningPhaseGoldExpAdvantage': 'goldPerMinute',
-                    'maxLevelLeadLaneOpponent': 'xpPerMinute'
-                }
+                raw_map = _RAW_FEATURE_MAP
                 
                 display_val = val
                 display_baseline = baseline
@@ -781,27 +763,18 @@ class WinPredictionModel:
                     if raw_key in stats and enemy_stats and raw_key in enemy_stats:
                         display_val = stats[raw_key]
                         display_baseline = enemy_stats[raw_key]
-                        # Use raw values for diff calc to ensure "Gap" makes sense
                         val = display_val
                         baseline = display_baseline
-                # ------------------------
 
-                # If value is significantly WORSE than baseline
                 if val is not None:
-                    # Avoid division by zero
-                    denom = abs(baseline) if baseline != 0 else 1.0 
-                    
+                    denom = abs(baseline) if baseline != 0 else 1.0
                     diff_pct = (val - baseline) / denom
-                    
-                    # Identify "Bad" performance. 
-                    # If diff_pct is negative, it means we are worse than baseline (assuming higher is better).
-                    # Exceptions: Deaths (lower is better), but usually we handle deaths via KDA or similar which is higher=better.
-                    
+
                     threshold = -0.1 if baseline_source == "enemy" else -0.15
                     
-                    if diff_pct < threshold: 
+                    if diff_pct < threshold:
                          readable_feature = feature.replace('_', ' ').replace('LaneOpponent','').title()
-                         info = name_map.get(feature, {'title': readable_feature, 'desc': f'Improve your {readable_feature}.'})
+                         info = _SKILL_FOCUS_NAME_MAP.get(feature, {'title': readable_feature, 'desc': f'Improve your {readable_feature}.'})
                          improvements.append({
                              "title": info['title'],
                              "description": info['desc'],
@@ -814,25 +787,7 @@ class WinPredictionModel:
                          
         # Sort by diff (lowest/most negative first), weighted by priority.
         # Weight > 1 makes the negative diff LARGER (more negative) -> Higher priority
-        priority_weights = {
-            'damageDealtToChampions': 1.5,
-            'goldPerMinute': 1.5,
-            'soloKills': 1.5,
-            'aggressionScore': 1.5,
-            'totalMinionsKilled': 1.4,
-            'turretPlatesTaken': 1.4,
-            'earlyLaningPhaseGoldExpAdvantage': 1.4,
-            'laningPhaseGoldExpAdvantage': 1.4,
-            'maxCsAdvantageOnLaneOpponent': 1.4,
-            
-            # Low Priority
-            'visionScore': 0.6,
-            'wardsPlaced': 0.5,
-            'controlWardsPlaced': 0.5,
-            'enemyMissingPings': 0.4
-        }
-        
-        improvements.sort(key=lambda x: x['diff'] * priority_weights.get(x['feature'], 1.0)) 
+        improvements.sort(key=lambda x: x['diff'] * _PRIORITY_WEIGHTS.get(x['feature'], 1.0))
         return improvements[:3]
 
 

@@ -1,4 +1,3 @@
-# Bump commit: 2026-02-04
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import analysis
@@ -10,16 +9,23 @@ from init_db import init_models
 async def lifespan(app: FastAPI):
     await init_models()
     yield
+    # Gracefully close the Riot API client on shutdown
+    from services.riot import riot_service
+    await riot_service.close()
 
 app = FastAPI(title="Riot Win Prediction API", lifespan=lifespan)
 
 # CORS setup
-origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+
+# If you set ALLOWED_ORIGINS="*" we must disable credentials (browser/CORS spec)
+allow_all = len(origins) == 1 and origins[0] == "*"
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"] if allow_all else origins,
+    allow_credentials=False if allow_all else True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

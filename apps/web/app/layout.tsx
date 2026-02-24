@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "League of Legends Win Prediction",
-  description: "Advanced AI-powered win prediction and stats analysis for League of Legends.",
+  title: "NEXUSINSIGHT | League of Legends Win Prediction",
+  description: "NEXUSINSIGHT - Advanced AI-powered win prediction and stats analysis for League of Legends.",
 };
 
 export default function RootLayout({

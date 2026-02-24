@@ -1,20 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { analyzeStats } from "@/lib/api";
+import type { AnalyzeProgressUpdate } from "@/lib/analysisContract";
 import {
     ArrowLeft, Trophy, Skull, Crown, Flame, HeartCrack, Umbrella,
     Baby, UserX, Swords, Castle, Wheat, Eye, EyeOff, Coins, Shield, Target,
     Sword, Banknote, HelpCircle, HeartHandshake, Ghost, Users, MoveHorizontal,
-    TrendingDown, Frown, Sparkles, Hand, HeartPulse, Bot, Gamepad2,
-    ChartLine, Crosshair, Trees, Activity, MessageCircle, BarChart3,
-    Zap, Heart, Timer, Layers, Map, Compass, TrendingUp, CheckCircle2, Circle, Loader2,
-    Search, Menu, Settings, Bell, ChevronRight, Share2, Download,
+    TrendingDown, Frown, Sparkles, Hand, HeartPulse, Bot,
+    ChartLine, Crosshair, MessageCircle, BarChart3,
+    Zap, Layers, Map, TrendingUp,
     Medal
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { AnalysisProgressCard } from "@/components/AnalysisProgressCard";
 
 // --- Types & Constants ---
 
@@ -49,26 +50,46 @@ const RANK_COLORS: Record<string, { text: string; border: string; glow: string; 
     "CHALLENGER": { text: "text-[#F4C542]", border: "border-[#F4C542]", glow: "shadow-[#F4C542]/20", bg: "bg-[#F4C542]/10" },
 };
 
-const LOADING_STAGES = [
-    { id: 1, label: "Finding Account", minPercent: 0 },
-    { id: 2, label: "Fetching Ranked Info", minPercent: 8 },
-    { id: 3, label: "Loading Match History", minPercent: 10 },
-    { id: 4, label: "Training AI Model", minPercent: 80 },
-    { id: 5, label: "Analyzing Playstyle", minPercent: 90 },
-    { id: 6, label: "Finalizing Results", minPercent: 95 },
-];
+function rankTierToEmblemSrc(tier: string | null | undefined): string | null {
+    if (!tier) return null;
+    const t = tier.toUpperCase();
+    const file = (() => {
+        switch (t) {
+            case "IRON":
+            case "BRONZE":
+            case "SILVER":
+            case "GOLD":
+            case "PLATINUM":
+            case "EMERALD":
+            case "DIAMOND":
+            case "MASTER":
+            case "GRANDMASTER":
+            case "CHALLENGER":
+                return t.toLowerCase();
+            default:
+                return null;
+        }
+    })();
+
+    return file ? `/rank-emblems/${file}.png` : null;
+}
 
 // --- Sub-Components ---
 
 function StatCard({ label, value, icon: Icon, subtext, trend, color }: { label: string; value: string | number; icon?: React.ElementType; subtext?: string; trend?: number; color?: string }) {
     return (
-        <div className="glass p-5 rounded-2xl hover:bg-white/[0.04] transition-all group border border-white/5">
+        <div
+            className="p-5 rounded-xl group transition-all"
+            style={{ background: "rgba(200,168,75,0.03)", border: "1px solid rgba(200,168,75,0.1)" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(200,168,75,0.06)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(200,168,75,0.03)"; }}
+        >
             <div className="flex justify-between items-start mb-2">
-                <span className="text-zinc-400 text-xs font-bold uppercase tracking-wider">{label}</span>
-                {Icon && <Icon className={cn("w-4 h-4 transition-colors", color || "text-zinc-500 group-hover:text-[#5842F4]")} />}
+                <span className="text-[10px] font-bold uppercase tracking-[0.15em]" style={{ color: "rgba(200,168,75,0.5)" }}>{label}</span>
+                {Icon && <Icon className={cn("w-4 h-4 transition-colors", color || "")} style={color ? {} : { color: "rgba(200,168,75,0.4)" }} />}
             </div>
             <div className={cn("text-2xl font-black mb-1 group-hover:scale-105 transition-transform origin-left", color || "text-white")}>{value}</div>
-            {subtext && <div className="text-xs text-zinc-500">{subtext}</div>}
+            {subtext && <div className="text-xs" style={{ color: "rgba(200,168,75,0.35)" }}>{subtext}</div>}
             {trend !== undefined && (
                 <div className={cn("text-xs font-bold flex items-center gap-1 mt-2", trend > 0 ? "text-green-400" : "text-red-400")}>
                     {trend > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
@@ -79,15 +100,16 @@ function StatCard({ label, value, icon: Icon, subtext, trend, color }: { label: 
     );
 }
 
-function InsightBar({ label, value, color = "bg-[#5842F4]", max = 100 }: { label: string; value: number; color?: string; max?: number }) {
+function InsightBar({ label, value, color = "bg-[#C8A84B]", max = 100 }: { label: string; value: number; color?: string; max?: number }) {
+    const safeVal = typeof value === 'number' && Number.isFinite(value) ? value : 0;
     return (
         <div className="mb-3">
-            <div className="flex justify-between text-xs font-bold uppercase tracking-wider mb-1">
-                <span className="text-zinc-400">{label}</span>
-                <span className="text-white">{value?.toFixed(1) || 0}</span>
+            <div className="flex justify-between text-xs font-bold uppercase tracking-[0.1em] mb-1">
+                <span style={{ color: "rgba(200,168,75,0.5)" }}>{label}</span>
+                <span style={{ color: "#FFD870" }}>{safeVal.toFixed(1)}%</span>
             </div>
-            <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                <div className={cn("h-full rounded-full transition-all duration-1000", color)} style={{ width: `${Math.min(((value || 0) / max) * 100, 100)}%` }} />
+            <div className="h-[3px] w-full rounded-full overflow-hidden" style={{ background: "rgba(200,168,75,0.08)" }}>
+                <div className={cn("h-full rounded-full transition-all duration-1000", color)} style={{ width: `${Math.min((safeVal / max) * 100, 100)}%` }} />
             </div>
         </div>
     );
@@ -95,7 +117,7 @@ function InsightBar({ label, value, color = "bg-[#5842F4]", max = 100 }: { label
 
 function DetailBlock({ title, icon: Icon, color, children }: { title: string; icon: any; color: string; children: React.ReactNode }) {
     return (
-        <div className="glass rounded-xl p-5 border border-white/5 hover:border-white/10 transition-colors">
+        <div className="rounded-xl p-5 transition-colors" style={{ background: "rgba(200,168,75,0.025)", border: "1px solid rgba(200,168,75,0.1)" }}>
             <h4 className={cn("font-bold text-sm mb-4 flex items-center gap-2", color)}>
                 <Icon className="w-4 h-4" />
                 {title}
@@ -110,8 +132,8 @@ function DetailBlock({ title, icon: Icon, color, children }: { title: string; ic
 function StatRow({ label, value, highlight = false, valueColor }: { label: string; value: string | number; highlight?: boolean; valueColor?: string }) {
     return (
         <div className="flex justify-between items-center text-sm">
-            <span className="text-zinc-400">{label}</span>
-            <span className={cn("font-bold", valueColor || (highlight ? "text-white" : "text-zinc-300"))}>{value}</span>
+            <span style={{ color: "rgba(200,168,75,0.45)" }}>{label}</span>
+            <span className={cn("font-bold", valueColor || (highlight ? "text-white" : ""))} style={valueColor || highlight ? {} : { color: "rgba(255,255,255,0.7)" }}>{value}</span>
         </div>
     );
 }
@@ -119,18 +141,20 @@ function StatRow({ label, value, highlight = false, valueColor }: { label: strin
 
 import { DetailedMatchAnalysis } from "@/components/DetailedMatchAnalysis";
 import { PlayerPerformanceTrends } from "@/components/PlayerPerformanceTrends";
+import { HeatmapVisualization } from "@/components/HeatmapVisualization";
+import { AICoachTab } from "@/components/AICoachTab";
 
 export default function Dashboard() {
     const params = useParams();
-    const router = useRouter();
     const region = params.region as string;
     const riotId = decodeURIComponent(params.riotId as string);
 
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [progress, setProgress] = useState({ message: "Initializing...", percent: 0 });
+    const [progress, setProgress] = useState<AnalyzeProgressUpdate>({ message: "Initializing...", percent: 0 });
     const [error, setError] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<"overview" | "match" | "trends">("overview");
+    const [activeTab, setActiveTab] = useState<"overview" | "match" | "trends" | "heatmap" | "ai">("overview");
+    const [rankEmblemErrored, setRankEmblemErrored] = useState(false);
 
     useEffect(() => {
         async function fetchData() {
@@ -148,65 +172,122 @@ export default function Dashboard() {
         if (riotId && region) fetchData();
     }, [riotId, region]);
 
+    useEffect(() => {
+        setRankEmblemErrored(false);
+    }, [data?.ranked_data?.tier]);
+
     // Derived formatting helpers
     const fmt = (val: any, decimals = 1) => typeof val === 'number' ? val.toFixed(decimals) : "0";
-    const fmtSigned = (val: number | undefined) => val !== undefined ? (val >= 0 ? "+" : "") + val.toFixed(1) : "0";
+    const fmtSigned = (val: unknown) => {
+        const n = typeof val === 'number' ? val : Number(val);
+        if (!Number.isFinite(n)) return "0";
+        return (n >= 0 ? "+" : "") + n.toFixed(1);
+    };
     const fmtPct = (val: any) => typeof val === 'number' ? (val * 100).toFixed(1) + "%" : "0%";
 
 
     // Loading Screen
     if (loading) {
-        const currentStageIndex = LOADING_STAGES.findIndex((stage, idx) => {
-            const nextStage = LOADING_STAGES[idx + 1];
-            return progress.percent >= stage.minPercent && (!nextStage || progress.percent < nextStage.minPercent);
-        });
-        return (
-            <div className="min-h-screen bg-[#05050f] text-white flex items-center justify-center relative overflow-hidden font-sans">
-                <div className="fixed inset-0 z-0 opacity-40 pointer-events-none bg-mesh"></div>
-                <div className="z-10 flex flex-col items-center gap-8 w-full max-w-md p-8 glass rounded-3xl border border-white/5">
-                    <div className="relative w-24 h-24">
-                        <div className="absolute inset-0 bg-[#5842F4]/20 rounded-full blur-xl animate-pulse" />
-                        <div className="absolute inset-0 border-4 border-[#5842F4]/20 border-t-[#5842F4] rounded-full animate-spin" />
-                        <div className="absolute inset-3 border-4 border-[#00D1FF]/20 border-b-[#00D1FF] rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '2s' }} />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <Activity className="w-8 h-8 text-white/50" />
-                        </div>
-                    </div>
-                    <div className="w-full text-center space-y-2">
-                        <h2 className="text-xl font-black uppercase italic tracking-tighter">{progress.message}</h2>
-                        <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-[#5842F4] to-[#00D1FF] transition-all duration-300" style={{ width: `${progress.percent}%` }} />
-                        </div>
-                        <div className="flex justify-between text-xs text-zinc-500 font-bold uppercase tracking-widest mt-2">
-                            <span>System Limit</span>
-                            <span>{progress.percent}%</span>
-                        </div>
-                    </div>
-                    <div className="w-full space-y-2">
-                        {LOADING_STAGES.map((stage, idx) => {
-                            const isCompleted = idx < currentStageIndex;
-                            const isCurrent = idx === currentStageIndex;
-                            return (
-                                <div key={stage.id} className={cn("flex items-center gap-3 text-xs font-bold uppercase tracking-widest transition-all", isCurrent ? "text-white scale-105 pl-2" : isCompleted ? "text-[#5842F4]" : "text-zinc-700")}>
-                                    {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : isCurrent ? <Loader2 className="w-4 h-4 animate-spin" /> : <Circle className="w-4 h-4" />}
-                                    {stage.label}
-                                </div>
-                            )
-                        })}
-                    </div>
-                </div>
-            </div>
-        );
+        return <AnalysisProgressCard progress={progress} />;
     }
 
     // Error State
     if (error || !data) return (
-        <div className="min-h-screen bg-[#05050f] text-white flex items-center justify-center font-sans">
-            <div className="glass p-10 rounded-3xl text-center border border-white/5 max-w-md">
-                <Skull className="w-16 h-16 text-red-500 mx-auto mb-6 opacity-80" />
-                <h2 className="text-3xl font-black uppercase italic tracking-tighter mb-4">Analysis Failed</h2>
-                <p className="text-zinc-400 mb-8">{error || "Could not retrieve data"}</p>
-                <Link href="/" className="bg-[#5842F4] px-8 py-3 rounded-xl font-bold uppercase tracking-widest hover:bg-[#4a36db] transition-colors">Return to Base</Link>
+        <div className="min-h-screen text-white flex items-center justify-center font-sans relative overflow-hidden" style={{ background: "#030308" }}>
+            {/* Grid */}
+            <div className="fixed inset-0 pointer-events-none" style={{ backgroundImage: "linear-gradient(rgba(200,168,75,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(200,168,75,0.025) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
+            {/* Vignette */}
+            <div className="fixed inset-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 80% 80% at 50% 50%, transparent 40%, rgba(3,3,8,0.9) 100%)" }} />
+            {/* Scan line */}
+            <div className="fixed left-0 right-0 h-px pointer-events-none" style={{ background: "linear-gradient(90deg, transparent, rgba(200,168,75,0.2) 50%, transparent)", animation: "ticker-scroll 10s linear infinite", top: "40%" }} />
+
+            {/* Card */}
+            <div
+                className="relative z-10 flex flex-col items-center text-center w-full max-w-sm mx-4 p-10 rounded-2xl"
+                style={{
+                    background: "linear-gradient(135deg, rgba(200,168,75,0.04) 0%, rgba(8,8,18,0.96) 50%, rgba(200,168,75,0.02) 100%)",
+                    border: "1px solid rgba(200,168,75,0.15)",
+                    boxShadow: "0 0 60px rgba(200,168,75,0.05), 0 32px 80px rgba(0,0,0,0.65), inset 0 1px 0 rgba(200,168,75,0.08)",
+                    backdropFilter: "blur(24px)",
+                }}
+            >
+                {/* FUI corners */}
+                {(["tl","tr","bl","br"] as const).map((pos) => {
+                    const vMap = { tl: "top-0 left-0", tr: "top-0 right-0", bl: "bottom-0 left-0", br: "bottom-0 right-0" };
+                    const rotMap = { tl: "0deg", tr: "90deg", br: "180deg", bl: "270deg" };
+                    return (
+                        <div key={pos} className={`absolute ${vMap[pos]} w-5 h-5`} style={{ transform: `rotate(${rotMap[pos]})` }}>
+                            <div className="absolute top-0 left-0 w-full h-[1px]" style={{ background: "rgba(200,168,75,0.5)" }} />
+                            <div className="absolute top-0 left-0 h-full w-[1px]" style={{ background: "rgba(200,168,75,0.5)" }} />
+                        </div>
+                    );
+                })}
+
+                {/* Header label */}
+                <div className="w-full flex items-center justify-between mb-6">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.25em]" style={{ color: "rgba(200,168,75,0.4)" }}>NEXUS SCAN</span>
+                    <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.2em]" style={{ color: "rgba(200,168,75,0.4)" }}>
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#C8A84B", boxShadow: "0 0 6px rgba(200,168,75,0.8)" }} />
+                        ERROR
+                    </span>
+                </div>
+
+                {/* Icon */}
+                <div className="relative mb-6 flex items-center justify-center">
+                    {/* Pulse rings */}
+                    <span className="absolute w-20 h-20 rounded-full border animate-ping" style={{ borderColor: "rgba(200,168,75,0.15)", animationDuration: "2s" }} />
+                    <span className="absolute w-16 h-16 rounded-full border animate-pulse" style={{ borderColor: "rgba(200,168,75,0.12)" }} />
+                    {/* Hex container */}
+                    <div className="relative flex items-center justify-center w-14 h-14">
+                        <svg className="absolute inset-0 w-full h-full animate-spin-xl" viewBox="0 0 56 56" fill="none">
+                            <polygon points="28,3 51,15.5 51,40.5 28,53 5,40.5 5,15.5" stroke="rgba(200,168,75,0.25)" strokeWidth="1" strokeDasharray="4 3" />
+                        </svg>
+                        <Skull className="relative z-10 w-7 h-7" style={{ color: "#C8A84B", filter: "drop-shadow(0 0 8px rgba(200,168,75,0.5))" }} />
+                    </div>
+                </div>
+
+                {/* Title */}
+                <h2 className="text-xl font-black uppercase tracking-[0.12em] mb-3" style={{ color: "#FFD870", textShadow: "0 0 24px rgba(255,216,112,0.3)" }}>
+                    Analysis Failed
+                </h2>
+
+                {/* Divider */}
+                <div className="w-full h-px mb-4" style={{ background: "linear-gradient(90deg, transparent, rgba(200,168,75,0.2), transparent)" }} />
+
+                {/* Error message */}
+                <p className="text-sm mb-8 leading-relaxed" style={{ color: "rgba(200,168,75,0.5)" }}>
+                    {error || "Could not retrieve data"}
+                </p>
+
+                {/* Button */}
+                <Link
+                    href="/"
+                    className="group relative px-8 py-3 rounded-xl font-bold uppercase tracking-[0.15em] text-sm overflow-hidden transition-all duration-300"
+                    style={{
+                        background: "linear-gradient(135deg, rgba(200,168,75,0.12), rgba(200,168,75,0.06))",
+                        border: "1px solid rgba(200,168,75,0.35)",
+                        color: "#FFD870",
+                        boxShadow: "0 0 20px rgba(200,168,75,0.08)",
+                    }}
+                    onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.background = "linear-gradient(135deg, rgba(200,168,75,0.22), rgba(200,168,75,0.12))";
+                        (e.currentTarget as HTMLElement).style.boxShadow = "0 0 24px rgba(200,168,75,0.2)";
+                        (e.currentTarget as HTMLElement).style.borderColor = "rgba(200,168,75,0.6)";
+                    }}
+                    onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.background = "linear-gradient(135deg, rgba(200,168,75,0.12), rgba(200,168,75,0.06))";
+                        (e.currentTarget as HTMLElement).style.boxShadow = "0 0 20px rgba(200,168,75,0.08)";
+                        (e.currentTarget as HTMLElement).style.borderColor = "rgba(200,168,75,0.35)";
+                    }}
+                >
+                    Return to Base
+                </Link>
+
+                {/* Footer */}
+                <div className="w-full flex items-center justify-between mt-8">
+                    <span className="text-[8px] font-bold uppercase tracking-[0.2em]" style={{ color: "rgba(200,168,75,0.2)" }}>NEXUSINSIGHT</span>
+                    <span className="text-[8px] font-bold uppercase tracking-[0.2em]" style={{ color: "rgba(200,168,75,0.2)" }}>v2.0</span>
+                </div>
             </div>
         </div>
     );
@@ -228,80 +309,128 @@ export default function Dashboard() {
         skill_focus = [],
         match_timeline_series = {},
         performance_trends = [],
-        enemy_stats: enemyStats = {}
+        enemy_stats: enemyStats = {},
+        heatmap_data = null
     } = data;
 
-    const { top_differentiators = [], category_importance = [] } = metrics || {};
     const profileIconUrl = `https://ddragon.leagueoflegends.com/cdn/${ddragon_version}/img/profileicon/${user.profile_icon_id}.png`;
-    const rankConfig = ranked_data?.tier ? RANK_COLORS[ranked_data.tier] : null;
+    const rankTier = typeof ranked_data?.tier === "string" ? ranked_data.tier.toUpperCase() : null;
+    const rankConfig = rankTier ? (RANK_COLORS[rankTier] ?? null) : null;
+    const rankEmblemSrc = rankTierToEmblemSrc(rankTier);
+    const rankText = ranked_data
+        ? [ranked_data.tier, ranked_data.rank].filter(Boolean).join(" ").trim()
+        : "";
+
+    const winProbDelta =
+        typeof win_probability === "number" && Number.isFinite(win_probability) &&
+        typeof win_rate === "number" && Number.isFinite(win_rate)
+            ? win_probability - win_rate
+            : undefined;
 
 
     return (
-        <div className="min-h-screen bg-[#05050f] text-white font-sans selection:bg-[#5842F4]/30 pb-20">
-            <div className="fixed inset-0 z-0 opacity-20 pointer-events-none bg-mesh" />
+        <div className="min-h-screen text-white font-sans pb-20" style={{ background: "#030308", caretColor: "#C8A84B" }}>
+            {/* Gold grid */}
+            <div className="fixed inset-0 z-0 pointer-events-none" style={{ backgroundImage: "linear-gradient(rgba(200,168,75,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(200,168,75,0.02) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
+            {/* Vignette */}
+            <div className="fixed inset-0 z-0 pointer-events-none" style={{ background: "radial-gradient(ellipse 100% 70% at 50% 0%, transparent 60%, rgba(3,3,8,0.7) 100%)" }} />
 
             {/* Sidebar Navigation */}
-            <aside className="fixed left-0 top-0 bottom-0 w-20 border-r border-white/5 bg-[#05050f]/80 backdrop-blur-xl z-50 flex flex-col items-center py-8 gap-8 hidden lg:flex">
-                <Link href="/" className="w-10 h-10 bg-gradient-to-br from-[#5842F4] to-[#00D1FF] rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(0,209,255,0.3)] hover:scale-110 transition-transform">
-                    <Activity className="text-white w-6 h-6" />
+            <aside
+                className="fixed left-0 top-0 bottom-0 w-20 z-50 flex flex-col items-center pt-6 pb-8 gap-8 hidden lg:flex"
+                style={{ borderRight: "1px solid rgba(200,168,75,0.1)", background: "rgba(3,3,8,0.85)", backdropFilter: "blur(20px)" }}
+            >
+                <Link href="/" className="w-12 h-12 flex items-center justify-center hover:scale-110 transition-transform">
+                    <img src="/logo.png" alt="NexusInsight" className="w-full h-full object-contain" />
                 </Link>
                 <nav className="flex flex-col gap-6 mt-auto mb-auto">
-                    <button onClick={() => setActiveTab("overview")} className={cn("p-3 rounded-xl transition-all", activeTab === "overview" ? "text-[#00D1FF] bg-white/5 shadow-[0_0_10px_rgba(0,209,255,0.2)]" : "text-zinc-500 hover:text-white hover:bg-white/5")}>
-                        <Trophy className="w-6 h-6" />
-                    </button>
-                    <button onClick={() => setActiveTab("match")} className={cn("p-3 rounded-xl transition-all", activeTab === "match" ? "text-[#00D1FF] bg-white/5 shadow-[0_0_10px_rgba(0,209,255,0.2)]" : "text-zinc-500 hover:text-white hover:bg-white/5")}>
-                        <Crosshair className="w-6 h-6" />
-                    </button>
-                    <button onClick={() => setActiveTab("trends")} className={cn("p-3 rounded-xl transition-all", activeTab === "trends" ? "text-[#00D1FF] bg-white/5 shadow-[0_0_10px_rgba(0,209,255,0.2)]" : "text-zinc-500 hover:text-white hover:bg-white/5")}>
-                        <ChartLine className="w-6 h-6" />
-                    </button>
+                    {(["overview", "match", "trends", "heatmap", "ai"] as const).map((tab, i) => {
+                        const icons = [Trophy, Crosshair, ChartLine, Map, Bot];
+                        const Icon = icons[i];
+                        const active = activeTab === tab;
+                        return (
+                            <button
+                                key={tab}
+                                onClick={() => setActiveTab(tab)}
+                                className="p-3 rounded-xl transition-all"
+                                style={active ? { color: "#FFD870", background: "rgba(200,168,75,0.1)", boxShadow: "0 0 12px rgba(200,168,75,0.2)" } : { color: "rgba(200,168,75,0.3)" }}
+                                onMouseEnter={(e) => { if (!active) (e.currentTarget as HTMLElement).style.color = "rgba(200,168,75,0.7)"; }}
+                                onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.color = "rgba(200,168,75,0.3)"; }}
+                            >
+                                <Icon className="w-6 h-6" />
+                            </button>
+                        );
+                    })}
                 </nav>
                 <div className="mt-auto">
-                    <img src={profileIconUrl} className="w-10 h-10 rounded-lg border border-white/10 opacity-50 grayscale hover:grayscale-0 transition-all" />
+                    <img src={profileIconUrl} className="w-10 h-10 rounded-lg opacity-50 grayscale hover:grayscale-0 transition-all" style={{ border: "1px solid rgba(200,168,75,0.15)" }} />
                 </div>
             </aside>
 
             {/* Main Content */}
             <main className="lg:pl-20 min-h-screen relative z-10">
                 {/* Header */}
-                <header className="h-20 border-b border-white/5 bg-[#05050f]/80 backdrop-blur-md sticky top-0 z-40 px-8 flex items-center justify-between">
+                <header className="h-20 sticky top-0 z-40 px-8 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(200,168,75,0.1)", background: "rgba(3,3,8,0.9)", backdropFilter: "blur(20px)" }}>
                     <div className="flex items-center gap-4">
-                        <Link href="/" className="lg:hidden p-2 -ml-2 text-zinc-400 hover:text-white"><ArrowLeft className="w-5 h-5" /></Link>
-                        <h1 className="text-xl font-bold uppercase tracking-widest text-[#00D1FF] hidden md:block">Nexus<span className="text-white">Analysis</span></h1>
+                        <Link href="/" className="lg:hidden p-2 -ml-2 transition-colors" style={{ color: "rgba(200,168,75,0.5)" }}><ArrowLeft className="w-5 h-5" /></Link>
+                        <h1 className="text-xl font-bold uppercase tracking-widest hidden md:block" style={{ color: "rgba(255,255,255,0.8)" }}>NEXUS<span style={{ color: "#C8A84B" }}>INSIGHT</span></h1>
                         <div className="h-6 w-px bg-white/10 hidden md:block"></div>
                         <div className="flex items-center gap-5">
                             <img src={profileIconUrl} className={cn("w-12 h-12 rounded-xl border-2 shadow-xl", rankConfig ? rankConfig.border : "border-zinc-700")} />
                             <div className="flex items-center gap-4">
                                 <div className="flex flex-col justify-center">
-                                    <div className="text-xl font-black text-white tracking-tight leading-tight">{user.game_name} <span className="text-zinc-500 font-medium opacity-80">#{user.tag_line}</span></div>
-                                    <div className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest mt-1 flex items-center gap-2 opacity-70">
+                                    <div className="text-xl font-black text-white tracking-tight leading-tight">{user.game_name} <span className="font-medium opacity-60" style={{ color: "rgba(200,168,75,0.6)" }}>#{user.tag_line}</span></div>
+                                    <div className="text-[11px] font-bold uppercase tracking-widest mt-1 flex items-center gap-2 opacity-70" style={{ color: "rgba(200,168,75,0.5)" }}>
                                         <span>{user.region}</span>
-                                        <span className="w-1 h-1 rounded-full bg-zinc-800"></span>
+                                        <span className="w-1 h-1 rounded-full" style={{ background: "rgba(200,168,75,0.3)" }}></span>
                                         <span>Level {user.summoner_level}</span>
                                     </div>
                                 </div>
                                 {ranked_data ? (
-                                    <div className={cn("flex items-center gap-3 px-4 h-12 rounded-2xl border shadow-lg shadow-black/40", rankConfig ? `${rankConfig.bg} ${rankConfig.border} ${rankConfig.glow}` : "bg-white/5 border-white/10")}>
-                                        <Crown className={cn("w-5 h-5", rankConfig?.text)} />
+                                    <div className={cn("flex items-center gap-3 px-4 h-12 rounded-2xl shadow-lg shadow-black/40", rankConfig ? `${rankConfig.bg} ${rankConfig.glow}` : "bg-white/5")}>
+                                        {rankEmblemSrc && !rankEmblemErrored ? (
+                                            <img
+                                                src={rankEmblemSrc}
+                                                alt={`${ranked_data.tier} rank emblem`}
+                                                className="w-8 h-8 object-contain"
+                                                loading="lazy"
+                                                decoding="async"
+                                                onError={() => setRankEmblemErrored(true)}
+                                            />
+                                        ) : (
+                                            <Crown className={cn("w-6 h-6", rankConfig?.text)} />
+                                        )}
                                         <span className={cn("text-xs font-black uppercase tracking-widest whitespace-nowrap", rankConfig?.text)}>
-                                            {ranked_data.tier} {ranked_data.rank} • {ranked_data.lp} LP
+                                            {rankText} • {ranked_data.lp} LP
                                         </span>
                                     </div>
-                                ) : null}
+                                ) : (
+                                    <div className="flex items-center gap-3 px-4 h-12 rounded-2xl shadow-lg shadow-black/40" style={{ background: "rgba(200,168,75,0.05)", border: "1px solid rgba(200,168,75,0.15)" }}>
+                                        <Medal className="w-6 h-6" style={{ color: "rgba(200,168,75,0.5)" }} />
+                                        <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap" style={{ color: "rgba(200,168,75,0.6)" }}>Unranked</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
-                        <div className="hidden md:flex items-center gap-1 bg-white/5 rounded-lg p-1">
-                            {["Overview", "Match", "Trends"].map((tab) => (
-                                <button
-                                    key={tab}
-                                    onClick={() => setActiveTab(tab.toLowerCase() as any)}
-                                    className={cn("px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wide transition-all", activeTab === tab.toLowerCase() ? "bg-[#5842F4] text-white shadow-lg" : "text-zinc-500 hover:text-white")}
-                                >
-                                    {tab}
-                                </button>
-                            ))}
+                        <div className="hidden md:flex items-center gap-1 rounded-lg p-1" style={{ background: "rgba(200,168,75,0.05)", border: "1px solid rgba(200,168,75,0.1)" }}>
+                            {["Overview", "Match", "Trends", "Heatmap", "AI"].map((tab) => {
+                                const active = activeTab === tab.toLowerCase();
+                                return (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab.toLowerCase() as any)}
+                                        className="px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-[0.1em] transition-all"
+                                        style={active
+                                            ? { background: "rgba(200,168,75,0.15)", color: "#FFD870", boxShadow: "0 0 10px rgba(200,168,75,0.15)", border: "1px solid rgba(200,168,75,0.25)" }
+                                            : { color: "rgba(200,168,75,0.4)", border: "1px solid transparent" }
+                                        }
+                                    >
+                                        {tab}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 </header>
@@ -312,133 +441,96 @@ export default function Dashboard() {
                     {activeTab === "overview" && (
                         <div className="space-y-8 animate-in fade-in slide-in-from-bottom duration-500">
                             {/* Top Stats */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                <div className="glass p-6 rounded-2xl border border-[#5842F4]/30 relative overflow-hidden group">
-                                    <div className="absolute top-0 right-0 p-4 opacity-50"><Zap className="w-8 h-8 text-[#5842F4]" /></div>
-                                    <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Win Probability</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="p-6 rounded-xl relative overflow-hidden group" style={{ background: "rgba(200,168,75,0.04)", border: "1px solid rgba(200,168,75,0.25)", boxShadow: "0 0 30px rgba(200,168,75,0.05)" }}>
+                                    <div className="absolute top-0 right-0 p-4 opacity-30"><Zap className="w-8 h-8" style={{ color: "#C8A84B" }} /></div>
+                                    <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] mb-2" style={{ color: "rgba(200,168,75,0.5)" }}>Win Probability</h3>
                                     <div className="flex items-baseline gap-2">
-                                        <div className="text-4xl font-black italic tracking-tighter text-white">{win_probability.toFixed(0)}<span className="text-xl text-[#5842F4]">%</span></div>
-                                        <span className="text-xs text-green-400 font-bold bg-green-400/10 px-2 py-0.5 rounded">+4.2%</span>
+                                        <div className="text-4xl font-black italic tracking-tighter" style={{ color: "#FFD870", textShadow: "0 0 20px rgba(255,216,112,0.3)" }}>{win_probability.toFixed(0)}<span className="text-xl" style={{ color: "#C8A84B" }}>%</span></div>
+                                        {winProbDelta !== undefined ? (
+                                            <span
+                                                className={cn(
+                                                    "text-xs font-bold px-2 py-0.5 rounded",
+                                                    winProbDelta >= 0 ? "text-green-400 bg-green-400/10" : "text-red-400 bg-red-400/10"
+                                                )}
+                                            >
+                                                {winProbDelta >= 0 ? "+" : ""}{winProbDelta.toFixed(1)}%
+                                            </span>
+                                        ) : null}
                                     </div>
-                                    <div className="w-full bg-white/10 h-1.5 rounded-full mt-4 overflow-hidden">
-                                        <div className={cn("h-full rounded-full", win_probability > 50 ? "bg-gradient-to-r from-[#5842F4] to-[#00D1FF]" : "bg-red-500")} style={{ width: `${win_probability}%` }}></div>
+                                    <div className="w-full h-[3px] rounded-full mt-4 overflow-hidden" style={{ background: "rgba(200,168,75,0.1)" }}>
+                                        <div className="h-full rounded-full transition-all" style={{ width: `${win_probability}%`, background: win_probability > 50 ? "linear-gradient(90deg, #C8A84B, #FFD870)" : "#ef4444", boxShadow: win_probability > 50 ? "0 0 8px rgba(255,216,112,0.4)" : "none" }}></div>
                                     </div>
-                                    <p className="text-[10px] text-zinc-500 mt-2 uppercase tracking-wider">Based on {total_matches} analyzed matches</p>
+                                    <p className="text-[10px] mt-2 uppercase tracking-[0.1em]" style={{ color: "rgba(200,168,75,0.3)" }}>Based on {total_matches} analyzed matches</p>
                                 </div>
 
-                                <div className="glass p-6 rounded-2xl border border-white/5">
-                                    <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Avg Performance</h3>
+                                <div className="p-6 rounded-xl" style={{ background: "rgba(200,168,75,0.03)", border: "1px solid rgba(200,168,75,0.1)" }}>
+                                    <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] mb-2" style={{ color: "rgba(200,168,75,0.5)" }}>Avg Performance</h3>
                                     <div className="flex items-baseline gap-2">
                                         <div className="text-3xl font-black text-white">{data.win_rate.toFixed(1)}%</div>
                                         <span className={cn("text-xs font-bold px-2 py-0.5 rounded", data.win_rate >= 50 ? "text-green-400 bg-green-400/10" : "text-red-400 bg-red-400/10")}>Win Rate</span>
                                     </div>
-                                    <div className="mt-4 flex gap-4 text-xs font-bold uppercase tracking-wider text-zinc-500">
+                                    <div className="mt-4 flex gap-4 text-xs font-bold uppercase tracking-[0.1em]" style={{ color: "rgba(200,168,75,0.4)" }}>
                                         <div><span className="text-white">{fmt(avg.kills)}</span> K</div>
                                         <div><span className="text-white">{fmt(avg.deaths)}</span> D</div>
                                         <div><span className="text-white">{fmt(avg.assists)}</span> A</div>
                                     </div>
                                 </div>
-
-                                <div className="glass p-6 rounded-2xl border border-white/5">
-                                    <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-400 mb-2">Style Signature</h3>
-                                    <div className="flex flex-wrap gap-2 mt-2">
-                                        {player_moods.slice(0, 3).map((mood: Mood, i: number) => (
-                                            <span key={i} className={cn("px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest border", mood.color.replace('text-', 'border-').replace('text-', 'text-'))}>
-                                                {mood.title}
-                                            </span>
-                                        ))}
-                                    </div>
-                                    <div className="mt-3 text-xs text-zinc-500 line-clamp-2">
-                                        {player_moods[0]?.description}
-                                    </div>
-                                </div>
-
-                                <div className="glass p-6 rounded-2xl border border-white/5 bg-gradient-to-br from-[#5842F4]/10 to-transparent">
-                                    <h3 className="text-xs font-bold uppercase tracking-widest text-[#5842F4] mb-2">AI Coach Insight</h3>
-                                    <p className="text-sm font-medium text-white italic">
-                                        "{player_moods[0]?.advice || 'Focus on maintaining your gold lead in mid-game transitions.'}"
-                                    </p>
-                                </div>
                             </div>
 
                             {/* Predictive Indicators (Restored) */}
-                            <div className="glass rounded-3xl p-8 border border-white/5">
+                            <div className="rounded-2xl p-8" style={{ background: "rgba(200,168,75,0.02)", border: "1px solid rgba(200,168,75,0.1)" }}>
                                 <h3 className="text-xl font-black uppercase italic tracking-tighter flex items-center gap-3 mb-6">
                                     <BarChart3 className="w-6 h-6 text-amber-500" />
                                     Predictive Indicators
                                     <span className="px-3 py-1 bg-amber-500/10 text-amber-500 rounded text-[10px] font-bold uppercase tracking-widest">Early Game Analysis</span>
+                                    <span className="px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest" style={{ background: "rgba(200,168,75,0.06)", color: "rgba(200,168,75,0.5)" }}>{total_matches} matches</span>
                                 </h3>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                     <DetailBlock title="Early Game Leads" icon={Zap} color="text-amber-400">
-                                        <StatRow label="Gold/XP @8m" value={fmtSigned(lastMatch.earlyLaningPhaseGoldExpAdvantage)} valueColor={lastMatch.earlyLaningPhaseGoldExpAdvantage > 0 ? "text-green-400" : "text-red-400"} />
-                                        <StatRow label="Gold/XP @14m" value={fmtSigned(lastMatch.laningPhaseGoldExpAdvantage)} valueColor={lastMatch.laningPhaseGoldExpAdvantage > 0 ? "text-green-400" : "text-red-400"} />
-                                        <StatRow label="Max CS Lead" value={fmtSigned(lastMatch.maxCsAdvantageOnLaneOpponent)} valueColor={lastMatch.maxCsAdvantageOnLaneOpponent > 0 ? "text-green-400" : "text-red-400"} />
-                                        <StatRow label="Turret Plates" value={fmt(lastMatch.turretPlatesTaken, 0)} valueColor="text-amber-400" />
+                                        <StatRow label="Gold Lead @14m" value={fmtSigned(avg.laneGoldLeadAt14)} valueColor={(Number(avg.laneGoldLeadAt14) || 0) > 0 ? "text-green-400" : "text-red-400"} />
+                                        <StatRow label="XP Lead @14m" value={fmtSigned(avg.laneXpLeadAt14)} valueColor={(Number(avg.laneXpLeadAt14) || 0) > 0 ? "text-green-400" : "text-red-400"} />
+                                        <StatRow label="Max CS Lead" value={fmtSigned(avg.maxCsAdvantageOnLaneOpponent)} valueColor={(Number(avg.maxCsAdvantageOnLaneOpponent) || 0) > 0 ? "text-green-400" : "text-red-400"} />
+                                        <StatRow label="Turret Plates" value={fmt(avg.turretPlatesTaken, 0)} valueColor="text-amber-400" />
                                     </DetailBlock>
 
                                     <DetailBlock title="Mechanical Skills" icon={Target} color="text-cyan-400">
-                                        <StatRow label="Hit Rate" value={fmt(lastMatch.skillshotHitRate) + "%"} valueColor="text-cyan-400" />
-                                        <StatRow label="Dodge Rate" value={fmt(lastMatch.skillshotDodgeRate) + "%"} valueColor="text-cyan-400" />
-                                        <StatRow label="Hits" value={`${lastMatch.skillshotsHit || 0} / ${lastMatch.mySkillshotCasts || 0}`} />
-                                        <StatRow label="Dodged" value={`${lastMatch.skillshotsDodged || 0} / ${lastMatch.enemySkillshotCasts || 0}`} />
+                                        <StatRow label="Hit Rate" value={fmt(avg.skillshotHitRate) + "%"} valueColor="text-cyan-400" />
+                                        <StatRow label="Dodge Rate" value={fmt(avg.skillshotDodgeRate) + "%"} valueColor="text-cyan-400" />
+                                        <StatRow label="Avg Hits" value={fmt(avg.skillshotsHit, 0)} />
+                                        <StatRow label="Avg Dodged" value={fmt(avg.skillshotsDodged, 0)} />
                                     </DetailBlock>
 
                                     <DetailBlock title="Vision Habits" icon={Eye} color="text-green-400">
-                                        <StatRow label="Vision Score" value={fmt(lastMatch.visionScore)} valueColor="text-green-400" />
-                                        <StatRow label="Wards Placed" value={fmt(lastMatch.wardsPlaced, 0)} />
-                                        <StatRow label="Control Wards" value={fmt(lastMatch.controlWardsPlaced, 0)} />
-                                        <StatRow label="Enemy Jungle" value={fmtPct(lastMatch.controlWardTimeCoverageInRiverOrEnemyHalf)} valueColor="text-emerald-400" />
+                                        <StatRow label="Vision Score" value={fmt(avg.visionScore)} valueColor="text-green-400" />
+                                        <StatRow label="Wards Placed" value={fmt(avg.wardsPlaced, 0)} />
+                                        <StatRow label="Control Wards" value={fmt(avg.controlWardsPlaced, 0)} />
+                                        <StatRow label="Enemy Jungle" value={fmtPct(avg.controlWardTimeCoverageInRiverOrEnemyHalf)} valueColor="text-emerald-400" />
                                     </DetailBlock>
 
                                     <DetailBlock title="Communication" icon={MessageCircle} color="text-blue-400">
-                                        <StatRow label="Enemy Missing" value={fmt(lastMatch.enemyMissingPings, 0)} />
-                                        <StatRow label="On My Way" value={fmt(lastMatch.onMyWayPings, 0)} />
-                                        <StatRow label="Assist Me" value={fmt(lastMatch.assistMePings, 0)} />
-                                        <StatRow label="Retreat" value={fmt(lastMatch.getBackPings, 0)} />
+                                        <StatRow label="Enemy Missing" value={fmt(avg.enemyMissingPings, 0)} />
+                                        <StatRow label="On My Way" value={fmt(avg.onMyWayPings, 0)} />
+                                        <StatRow label="Assist Me" value={fmt(avg.assistMePings, 0)} />
+                                        <StatRow label="Retreat" value={fmt(avg.getBackPings, 0)} />
                                     </DetailBlock>
                                 </div>
                             </div>
 
                             {/* ML Insights */}
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                <div className="glass rounded-3xl p-8 border border-white/5">
+                            <div className="grid grid-cols-1 gap-8">
+                                <div className="rounded-2xl p-8" style={{ background: "rgba(200,168,75,0.02)", border: "1px solid rgba(200,168,75,0.1)" }}>
                                     <h3 className="text-xl font-black uppercase italic tracking-tighter flex items-center gap-3 mb-6">
-                                        <Crosshair className="w-6 h-6 text-[#00D1FF]" /> Key Win Drivers
+                                        <Layers className="w-6 h-6" style={{ color: "#C8A84B" }} /> Performance Breakdown
                                     </h3>
                                     <div className="space-y-4">
-                                        {win_drivers.slice(0, 4).map((driver: any, idx: number) => {
-                                            const diff = driver.diff_pct * 100;
-                                            return (
-                                                <div key={idx} className="relative group p-4 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] transition-colors border-l-2 border-transparent hover:border-l-[#5842F4]">
-                                                    <div className="flex justify-between items-center relative z-10">
-                                                        <div>
-                                                            <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Win Driver {idx + 1}</div>
-                                                            <div className="font-bold text-white text-sm">{driver.name}</div>
-                                                        </div>
-                                                        <div className={cn("text-lg font-black italic", diff > 0 ? "text-green-400" : "text-red-400")}>
-                                                            {diff > 0 ? "+" : ""}{diff.toFixed(1)}%
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
-                                <div className="glass rounded-3xl p-8 border border-white/5">
-                                    <h3 className="text-xl font-black uppercase italic tracking-tighter flex items-center gap-3 mb-6">
-                                        <Layers className="w-6 h-6 text-purple-400" /> Performance Breakdown
-                                    </h3>
-                                    <div className="space-y-4">
-                                        <InsightBar label="Combat Efficiency" value={avg.combat_efficiency} max={100} color="bg-red-500" />
-                                        <InsightBar label="Vision Control" value={avg.visionScorePerMinute * 100} max={250} color="bg-green-500" />
-                                        <InsightBar label="Aggression" value={avg.aggressionScore} max={100} color="bg-red-600" />
-                                        <InsightBar label="Invasion Pressure" value={avg.jungleInvasionPressure} max={150} color="bg-purple-500" />
-                                        <InsightBar label="Consistency" value={metrics?.consistency_score || 75} max={100} color="bg-blue-400" />
-                                        {territory_metrics?.time_in_enemy_territory_pct !== undefined && (
-                                            <InsightBar label="Forward Pos" value={territory_metrics.time_in_enemy_territory_pct} max={100} color="bg-orange-400" />
-                                        )}
+                                        <InsightBar label="Combat Efficiency" value={Number(avg.combat_efficiency) || 0} max={100} color="bg-red-500" />
+                                        <InsightBar label="Vision Control" value={Math.min(((Number(avg.visionScorePerMinute) || 0) * 100) / 2.5, 100)} max={100} color="bg-green-500" />
+                                        <InsightBar label="Aggression" value={Number(avg.aggressionScore) || 0} max={100} color="bg-red-600" />
+                                        <InsightBar label="Time in Enemy Half" value={Number(territory_metrics?.time_in_enemy_territory_pct) || 0} max={100} color="bg-purple-500" />
+                                        <InsightBar label="Consistency" value={Number(metrics?.consistency_score) || 75} max={100} color="bg-blue-400" />
+                                        <InsightBar label="Forward Pos" value={Number(territory_metrics?.forward_positioning_score) || 0} max={100} color="bg-orange-400" />
                                     </div>
                                 </div>
                             </div>
@@ -464,7 +556,33 @@ export default function Dashboard() {
                         <div className="space-y-8 animate-in fade-in slide-in-from-bottom duration-500">
                             <PlayerPerformanceTrends
                                 data={performance_trends}
-                                loading={loading}
+                                winDrivers={win_drivers}
+                            />
+                        </div>
+                    )}
+
+                    {/* HEATMAP TAB */}
+                    {activeTab === "heatmap" && (
+                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom duration-500">
+                            <HeatmapVisualization
+                                heatmapData={heatmap_data}
+                                ddragonVersion={ddragon_version}
+                            />
+                        </div>
+                    )}
+
+                    {/* AI COACH TAB */}
+                    {activeTab === "ai" && (
+                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom duration-500">
+                            <AICoachTab
+                                lastMatchStats={lastMatch}
+                                winDrivers={win_drivers}
+                                skillFocus={skill_focus}
+                                playerMoods={player_moods}
+                                weightedAverages={avg}
+                                enemyStats={enemyStats}
+                                winProbability={win_probability}
+                                winRate={win_rate}
                             />
                         </div>
                     )}

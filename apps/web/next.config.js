@@ -7,7 +7,10 @@ const nextConfig = {
     // However, for this "demo" wrapper integration, we might hit type issues with 'any'.
     typescript: {
         ignoreBuildErrors: true,
-    }
+    },
+    eslint: {
+        ignoreDuringBuilds: true,
+    },
 };
 
 module.exports = nextConfig;

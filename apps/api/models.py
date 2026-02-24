@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, Boolean, ForeignKey, DateTime, JSON, BigInteger
+from sqlalchemy import Column, String, Integer, Float, Boolean, ForeignKey, DateTime, JSON, BigInteger, Index
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -9,7 +9,7 @@ class User(Base):
     puuid = Column(String, primary_key=True, index=True)
     game_name = Column(String, index=True)
     tag_line = Column(String, index=True)
-    region = Column(String) # platform region e.g. euw1
+    region = Column(String)
     profile_icon_id = Column(Integer)
     summoner_level = Column(Integer)
     last_updated = Column(DateTime, default=datetime.datetime.utcnow)
@@ -19,17 +19,19 @@ class Match(Base):
 
     match_id = Column(String, primary_key=True, index=True)
     platform_id = Column(String)
-    game_creation = Column(BigInteger)
+    game_creation = Column(BigInteger, index=True)  # Index for ORDER BY game_creation DESC
     game_duration = Column(Integer)
     game_version = Column(String)
     queue_id = Column(Integer)
-    # Store full JSON for future proofing / raw access
-    data = Column(JSON) 
-    
+    data = Column(JSON)
+
     participants = relationship("Participant", back_populates="match", cascade="all, delete-orphan")
 
 class Participant(Base):
     __tablename__ = "participants"
+    __table_args__ = (
+        Index('idx_participant_puuid_match', 'puuid', 'match_id'),  # Composite index for common JOINs
+    )
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     match_id = Column(String, ForeignKey("matches.match_id"))
@@ -44,7 +46,7 @@ class Participant(Base):
     deaths = Column(Integer)
     assists = Column(Integer)
     
-    # ML Features (from ml_model.py)
+    # ML Features
     gold_per_minute = Column(Float)
     total_minions_killed = Column(Integer)
     vision_score = Column(Float)

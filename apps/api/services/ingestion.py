@@ -3,7 +3,8 @@ from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
 from models import User, Match, Participant
 from services.riot import riot_service
-import json
+from riotskillissue import NotFoundError, RiotAPIError
+import asyncio
 import logging
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,6 @@ class IngestionService:
         user = result.scalars().first()
         
         if user:
-            # TODO: Check last_updated and refresh if stale
             return user
             
         # Fetch from Riot
@@ -92,33 +92,87 @@ class IngestionService:
                 details = await riot_service.get_match_details(routing, match_id)
                 await self.save_match(details)
                 new_matches.append(match_id)
+                # Delay between requests to avoid rate limiting
+                await asyncio.sleep(1.2)
+            except NotFoundError:
+                logger.debug("Match %s not found, skipping", match_id)
+            except RiotAPIError as e:
+                logger.error("Riot API error ingesting match %s: %s", match_id, e)
             except Exception as e:
-                import traceback
-                traceback.print_exc()
-                logger.error(f"Failed to ingest match {match_id}: {e}")
+                logger.exception("Failed to ingest match %s", match_id)
                 
         return new_matches
 
     async def ingest_match_history_generator(self, user: User, count: int = 20):
-        """Yields progress updates (current, total, match_id)"""
+        """Yield progress updates while ingesting match history."""
         routing = self._get_routing(user.region)
         match_ids = await riot_service.get_match_history(routing, user.puuid, count=count)
         
         total = len(match_ids)
-        for idx, match_id in enumerate(match_ids):
-            yield {"current": idx + 1, "total": total, "status": f"Processing match {idx + 1}/{total}"}
-            
-            # Check if exists
-            result = await self.db.execute(select(Match).where(Match.match_id == match_id))
-            if result.scalars().first():
-                continue
-                
-            # Fetch details
-            try:
-                details = await riot_service.get_match_details(routing, match_id)
-                await self.save_match(details)
-            except Exception as e:
-                logger.error(f"Failed to ingest match {match_id}: {e}")
+        if total == 0:
+            yield {"current": 0, "total": 0, "status": "No matches found"}
+            return
+
+        yield {"current": 0, "total": total, "status": f"Found {total} matches, checking cache..."}
+        
+        # Batch check which matches already exist in DB
+        result = await self.db.execute(
+            select(Match.match_id).where(Match.match_id.in_(match_ids))
+        )
+        existing_ids = set(row[0] for row in result.fetchall())
+        
+        new_match_ids = [mid for mid in match_ids if mid not in existing_ids]
+        cached_count = len(existing_ids)
+        
+        if cached_count > 0:
+            yield {"current": cached_count, "total": total, "status": f"{cached_count} matches cached, fetching {len(new_match_ids)} new..."}
+        
+        if not new_match_ids:
+            yield {"current": total, "total": total, "status": "All matches already cached"}
+            return
+        
+        # Throttle concurrent API requests to avoid rate limiting.
+        _API_SEMAPHORE = asyncio.Semaphore(3)   # max 3 concurrent requests
+        _API_DELAY     = 1.2                     # seconds between requests
+
+        async def fetch_match_data(match_id: str):
+            """Fetch match details (API only, no DB), respecting rate limits."""
+            async with _API_SEMAPHORE:
+                try:
+                    details = await riot_service.get_match_details(routing, match_id)
+                    return (match_id, details, None)
+                except NotFoundError:
+                    logger.debug("Match %s not found", match_id)
+                    return (match_id, None, "not found")
+                except RiotAPIError as e:
+                    logger.error("Riot API error fetching match %s: %s", match_id, e)
+                    return (match_id, None, str(e))
+                except Exception as e:
+                    logger.error(f"Failed to fetch match {match_id}: {e}")
+                    return (match_id, None, str(e))
+                finally:
+                    await asyncio.sleep(_API_DELAY)
+
+        tasks = [asyncio.create_task(fetch_match_data(mid)) for mid in new_match_ids]
+
+        yield {"current": cached_count, "total": total, "status": f"Fetching {len(new_match_ids)} matches from Riot API..."}
+
+        completed = cached_count
+        for task in asyncio.as_completed(tasks):
+            match_id, details, error = await task
+            completed += 1
+
+            if details:
+                try:
+                    await self.save_match(details)
+                    status = f"Saved match {completed}/{total}"
+                except Exception as e:
+                    logger.error(f"Failed to save match {match_id}: {e}")
+                    status = f"Failed to save {match_id}"
+            else:
+                status = f"Failed to fetch {match_id}: {error}"
+
+            yield {"current": completed, "total": total, "status": status}
 
     def _get_routing(self, region: str) -> str:
         if region.startswith("na") or region.startswith("la") or region.startswith("br"):

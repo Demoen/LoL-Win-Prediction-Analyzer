@@ -24,11 +24,30 @@ except ImportError:
 # Use SQLite for dev, allow override for Postgres in production
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./params.db")
 
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=True, # Enable for debugging
-    future=True
-)
+# Convert Railway's postgres:// to postgresql+asyncpg:// for async support
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+elif DATABASE_URL.startswith("postgresql://") and "+asyncpg" not in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+is_sqlite = DATABASE_URL.startswith("sqlite")
+
+# Configure engine with connection pooling for PostgreSQL
+engine_kwargs = {
+    "echo": os.getenv("SQL_ECHO", "false").lower() == "true",
+    "future": True,
+}
+
+# Add connection pooling for PostgreSQL (SQLite doesn't support it)
+if not is_sqlite:
+    engine_kwargs.update({
+        "pool_size": 5,           # Base pool connections
+        "max_overflow": 10,       # Extra connections when pool is full
+        "pool_pre_ping": True,    # Health check connections before use
+        "pool_recycle": 300,      # Recycle connections after 5 minutes
+    })
+
+engine = create_async_engine(DATABASE_URL, **engine_kwargs)
 
 AsyncSessionLocal = async_sessionmaker(
     engine,
