@@ -1045,12 +1045,14 @@ function PickSuggestions({ picks }: { picks: PickSuggestion[] }) {
                   {ROLE_LABELS[p.role] ?? p.role}
                 </span>
               )}
-              <span
-                className="text-[10px] font-mono font-bold"
-                style={{ color: p.win_delta > 0 ? "#4ade80" : p.win_delta < 0 ? RED : "white" }}
-              >
-                {p.win_delta > 0 ? "+" : ""}{p.win_delta}%
-              </span>
+              {Math.abs(p.win_delta) >= 0.5 && (
+                <span
+                  className="text-[10px] font-mono font-bold"
+                  style={{ color: p.win_delta > 0 ? "#4ade80" : p.win_delta < 0 ? RED : "white" }}
+                >
+                  {p.win_delta > 0 ? "+" : ""}{p.win_delta}%
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2 mt-0.5">
               {p.synergy_score > 0.01 && (

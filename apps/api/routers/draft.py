@@ -226,6 +226,13 @@ async def analyze_draft(req: DraftAnalyzeRequest):
         )
         user_win_prob = blue_prob if req.user_side == "blue" else 1.0 - blue_prob
 
+        # Damp toward 50% when few picks have been made — the model was trained on
+        # full/near-full drafts and produces unreliable extremes on partial boards.
+        # reliability reaches 1.0 at 8 total picks (both teams near-complete).
+        total_picks = len(req.blue_champions) + len(req.red_champions)
+        reliability = min(1.0, total_picks / 8.0)
+        displayed_win_prob = 0.5 + (user_win_prob - 0.5) * reliability
+
         # Suggested picks — always for the side that is CURRENTLY picking
         picks_raw = draft_analyzer.suggest_best_picks(
             active_ally, active_enemy, req.banned_champions, picking_side, top_n=8
@@ -272,7 +279,7 @@ async def analyze_draft(req: DraftAnalyzeRequest):
         unfilled = list(draft_analyzer._get_unfilled_roles(active_ally))
 
         return DraftAnalyzeResponse(
-            win_probability=round(user_win_prob * 100, 1),
+            win_probability=round(displayed_win_prob * 100, 1),
             suggested_picks=suggested_picks,
             suggested_bans=suggested_bans,
             synergies=synergies,
