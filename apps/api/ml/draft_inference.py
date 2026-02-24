@@ -7,18 +7,19 @@ from __future__ import annotations
 
 import json
 import logging
-import pickle
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
+from xgboost import XGBClassifier
 
 logger = logging.getLogger(__name__)
 
 _HERE = Path(__file__).resolve().parent
 _DATA_DIR = _HERE / "data"
 
-MODEL_PATH = _DATA_DIR / "draft_model.pkl"
+MODEL_PATH = _DATA_DIR / "draft_model.ubj"
+MODEL_META_PATH = _DATA_DIR / "draft_model_meta.json"
 MATRICES_PATH = _DATA_DIR / "draft_matrices.json"
 CHAMPION_MAP_PATH = _DATA_DIR / "champion_map.json"
 CHAMPION_ROLES_PATH = _DATA_DIR / "champion_roles.json"
@@ -46,13 +47,16 @@ class DraftAnalyzer:
         if self._loaded:
             return
 
-        # Model
-        with open(MODEL_PATH, "rb") as f:
-            art = pickle.load(f)
-        self.model = art["model"]
-        self.champion_ids = art["champion_ids"]
-        self.champ_to_idx = art["champ_to_idx"]
-        self.n_champs = art["n_champs"]
+        # Model — XGBoost native format (.ubj), Python-version independent
+        self.model = XGBClassifier()
+        self.model.load_model(str(MODEL_PATH))
+
+        # Champion index metadata
+        with open(MODEL_META_PATH) as f:
+            meta = json.load(f)
+        self.champion_ids = meta["champion_ids"]
+        self.champ_to_idx = {int(k): v for k, v in meta["champ_to_idx"].items()}
+        self.n_champs = meta["n_champs"]
 
         # Matrices
         with open(MATRICES_PATH) as f:

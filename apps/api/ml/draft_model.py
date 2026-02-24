@@ -17,12 +17,10 @@ from __future__ import annotations
 import json
 import logging
 import os
-import pickle
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import train_test_split
 from xgboost import XGBClassifier
 
@@ -35,7 +33,8 @@ _HERE = Path(__file__).resolve().parent
 _DATA_DIR = _HERE / "data"
 _DATASET_DIR = _HERE.parent.parent.parent / "dataset"
 
-MODEL_PATH = _DATA_DIR / "draft_model.pkl"
+MODEL_PATH = _DATA_DIR / "draft_model.ubj"  # XGBoost native format — Python-version independent
+MODEL_META_PATH = _DATA_DIR / "draft_model_meta.json"  # champion index metadata
 MATRICES_PATH = _DATA_DIR / "draft_matrices.json"
 CHAMPION_MAP_PATH = _DATA_DIR / "champion_map.json"
 CHAMPION_ROLES_PATH = _DATA_DIR / "champion_roles.json"
@@ -441,7 +440,7 @@ def train_draft_model() -> dict:
         X, y, test_size=0.2, random_state=42, stratify=y
     )
 
-    # XGBoost
+    # XGBoost — using binary:logistic so predict_proba is already well-calibrated
     xgb = XGBClassifier(
         n_estimators=300,
         max_depth=6,
@@ -455,33 +454,32 @@ def train_draft_model() -> dict:
     )
     xgb.fit(X_train, y_train)
 
-    # Calibrate probabilities
-    calibrated = CalibratedClassifierCV(xgb, cv=3, method="sigmoid")
-    calibrated.fit(X_train, y_train)
-
     # Evaluate
     from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
 
-    y_pred = calibrated.predict(X_test)
-    y_prob = calibrated.predict_proba(X_test)[:, 1]
+    y_pred = xgb.predict(X_test)
+    y_prob = xgb.predict_proba(X_test)[:, 1]
     acc = accuracy_score(y_test, y_pred)
     ll = log_loss(y_test, y_prob)
     auc = roc_auc_score(y_test, y_prob)
 
     logger.info("Accuracy: %.4f  |  Log-loss: %.4f  |  AUC: %.4f", acc, ll, auc)
 
-    # Persist model
+    # Persist model using XGBoost native format — portable across Python versions
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    model_artefact = {
-        "model": calibrated,
-        "champion_ids": champion_ids,
-        "champ_to_idx": champ_to_idx,
-        "n_champs": n_champs,
-    }
-    with open(MODEL_PATH, "wb") as f:
-        pickle.dump(model_artefact, f)
+    xgb.save_model(str(MODEL_PATH))  # .ubj binary JSON — no pickle, no version lock
     logger.info("Model saved → %s", MODEL_PATH)
+
+    # Save champion index metadata separately as plain JSON
+    meta = {
+        "champion_ids": [int(x) for x in champion_ids],
+        "champ_to_idx": {str(int(k)): int(v) for k, v in champ_to_idx.items()},
+        "n_champs": int(n_champs),
+    }
+    with open(MODEL_META_PATH, "w") as f:
+        json.dump(meta, f)
+    logger.info("Model metadata saved → %s", MODEL_META_PATH)
 
     # Compute matrices
     logger.info("Computing synergy matrix …")
