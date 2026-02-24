@@ -150,6 +150,62 @@ def aggregate_territory_metrics(metrics_list: List[Dict[str, float]]) -> Dict[st
     return aggregated
 
 
+def extract_lane_lead_at_minute(
+    timeline_data: Any,
+    participant_id: int,
+    enemy_participant_id: int,
+    target_minute: int = 14,
+) -> Optional[tuple]:
+    """Extract gold/xp lead vs lane opponent at a specific minute.
+
+    Much lighter than :func:`analyze_match_timeline_series` – it only locates the
+    single closest frame and reads two values instead of building the full series.
+
+    Returns ``(gold_lead, xp_lead)`` or ``None``.
+    """
+    if not timeline_data:
+        return None
+
+    try:
+        info = _get_attr_or_key(timeline_data, 'info', {})
+        frames = _get_attr_or_key(info, 'frames', [])
+        if not frames:
+            return None
+
+        target_ms = target_minute * 60000
+        best_frame = None
+        best_diff = float('inf')
+
+        for frame in frames:
+            timestamp = _get_attr_or_key(frame, 'timestamp', 0)
+            diff = abs(timestamp - target_ms)
+            if diff < best_diff:
+                best_diff = diff
+                best_frame = frame
+
+        if not best_frame:
+            return None
+
+        participant_frames = _get_attr_or_key(best_frame, 'participantFrames', {})
+        if not participant_frames:
+            return None
+
+        my_data = _get_attr_or_key(participant_frames, str(participant_id))
+        enemy_data = _get_attr_or_key(participant_frames, str(enemy_participant_id))
+
+        if not my_data or not enemy_data:
+            return None
+
+        my_gold = _get_attr_or_key(my_data, 'totalGold', 0)
+        my_xp = _get_attr_or_key(my_data, 'xp', 0)
+        enemy_gold = _get_attr_or_key(enemy_data, 'totalGold', 0)
+        enemy_xp = _get_attr_or_key(enemy_data, 'xp', 0)
+
+        return (my_gold - enemy_gold, my_xp - enemy_xp)
+    except Exception:
+        return None
+
+
 def analyze_match_timeline_series(
     timeline_data: Any,
     participant_id: int,

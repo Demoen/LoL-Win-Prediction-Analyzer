@@ -9,7 +9,7 @@ from services.riot import riot_service
 from services.ddragon import get_ddragon_version
 from ml.pipeline import load_player_data
 from ml.training import model_instance
-from ml.timeline_analysis import analyze_match_territory, aggregate_territory_metrics, analyze_match_timeline_series, extract_heatmap_data
+from ml.timeline_analysis import aggregate_territory_metrics, analyze_match_timeline_series, extract_heatmap_data, extract_lane_lead_at_minute, calculate_territory_metrics
 from models import Match, Participant
 from pydantic import BaseModel
 from typing import Optional
@@ -88,32 +88,32 @@ LANE_LEAD_MATCH_LIMIT_MAX = 21
 LANE_LEAD_TARGET_MINUTE = 14
 
 
-def _closest_timeline_point(points: list, target_minute: int):
-    valid = [
-        p for p in (points or [])
-        if isinstance(p, dict)
-        and ("minute" in p)
-        and isinstance(p.get("minute"), (int, float))
-    ]
-    if not valid:
-        return None
-    return min(valid, key=lambda p: abs(float(p["minute"]) - float(target_minute)))
-
-
 async def _compute_recent_lane_leads_at_minute(
     db: AsyncSession,
     puuid: str,
     platform_region: str,
     target_minute: int = LANE_LEAD_TARGET_MINUTE,
     limit: int = LANE_LEAD_MATCH_LIMIT_MAX,
+    timeline_cache: dict | None = None,
 ) -> dict:
     """Compute average lane-opponent gold/xp leads at a target minute across recent matches.
+
+    Uses the lightweight ``extract_lane_lead_at_minute`` instead of building
+    a full timeline series per match, and relies on the library's built-in
+    rate limiter instead of explicit sleeps.
+
+    *timeline_cache* is an optional ``{match_id: timeline}`` dict that is
+    both read from and written to so other consumers can reuse fetched
+    timelines.
 
     Returns keys:
       - laneGoldLeadAt14
       - laneXpLeadAt14
       - laneLeadSampleSize
     """
+    if timeline_cache is None:
+        timeline_cache = {}
+
     try:
         result = await db.execute(
             select(Participant, Match)
@@ -128,7 +128,7 @@ async def _compute_recent_lane_leads_at_minute(
 
         regional_routing = REGION_TO_ROUTING.get((platform_region or "").lower(), "europe")
 
-        # Throttle concurrent timeline API requests to avoid rate limiting
+        # Throttle concurrent timeline API requests
         _timeline_sem = asyncio.Semaphore(3)
 
         async def _one(participant: Participant, match: Match):
@@ -169,32 +169,28 @@ async def _compute_recent_lane_leads_at_minute(
             if not enemy_pid:
                 return None
 
-            timeline = None
-            async with _timeline_sem:
-                timeline = await riot_service.get_match_timeline(regional_routing, str(match_id))
-                await asyncio.sleep(1.2)
+            # Fetch timeline (cache-aware, no explicit sleep – library rate-limits)
+            if match_id in timeline_cache:
+                timeline = timeline_cache[match_id]
+            else:
+                async with _timeline_sem:
+                    timeline = await riot_service.get_match_timeline(regional_routing, str(match_id))
+                timeline_cache[match_id] = timeline
+
             if not timeline:
                 return None
 
-            series = analyze_match_timeline_series(timeline, int(my_pid), int(enemy_pid))
-            points = (series or {}).get("timeline") or []
-            point = _closest_timeline_point(points, target_minute)
-            if not point:
+            # Lightweight extraction – single frame lookup instead of full series
+            lead = extract_lane_lead_at_minute(timeline, int(my_pid), int(enemy_pid), target_minute)
+            if lead is None:
                 return None
 
-            if "laneGoldDelta" not in point or "laneXpDelta" not in point:
+            gold_lead, xp_lead = lead
+            if not math.isfinite(gold_lead) or not math.isfinite(xp_lead):
                 return None
+            return (gold_lead, xp_lead)
 
-            try:
-                gold_lead = float(point.get("laneGoldDelta") or 0.0)
-                xp_lead = float(point.get("laneXpDelta") or 0.0)
-                if not math.isfinite(gold_lead) or not math.isfinite(xp_lead):
-                    return None
-                return (gold_lead, xp_lead)
-            except Exception:
-                return None
-
-        # Fetch timelines concurrently; RiotService already rate-limits via semaphore.
+        # Fetch timelines concurrently; RiotClient already rate-limits internally.
         tasks = [_one(participant, match) for participant, match in rows]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -427,25 +423,42 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
 
             weighted_averages = model_instance.calculate_weighted_averages(df)
 
+            # Shared timeline cache: lane leads, territory, and last-match
+            # timeline all potentially fetch the same match timelines.
+            # A simple dict avoids duplicate Riot API calls across stages.
+            _timeline_cache: dict = {}
+
             # Add timeline-derived lane opponent leads (gold/xp) at ~14m.
             # Riot's `challenges.*GoldExpAdvantage` is unreliable; timeline is the source of truth.
+            # Run lane leads + territory analysis concurrently (they're independent).
             try:
                 lane_lead_limit = min(int(len(df)) if not df.empty else 0, LANE_LEAD_MATCH_LIMIT_MAX)
                 if lane_lead_limit <= 0:
                     lane_lead_limit = LANE_LEAD_MATCH_LIMIT_MAX
 
-                yield await _progress("LANE_LEADS", f"Computing lane leads @14m (last {lane_lead_limit} matches)...", 79)
-                lane_leads = await _compute_recent_lane_leads_at_minute(
+                yield await _progress("LANE_LEADS", f"Computing lane leads & territory (last {lane_lead_limit} matches)...", 79)
+
+                lane_leads_coro = _compute_recent_lane_leads_at_minute(
                     db,
                     user.puuid,
                     request.region,
                     target_minute=LANE_LEAD_TARGET_MINUTE,
                     limit=lane_lead_limit,
+                    timeline_cache=_timeline_cache,
                 )
+                territory_coro = analyze_territory_for_player(
+                    db, user.puuid, request.region, timeline_cache=_timeline_cache,
+                )
+
+                lane_leads, territory_metrics = await asyncio.gather(
+                    lane_leads_coro, territory_coro, return_exceptions=False,
+                )
+
                 if isinstance(weighted_averages, dict) and isinstance(lane_leads, dict):
                     weighted_averages.update(lane_leads)
             except Exception as e:
-                logger.exception("Error adding lane lead averages")
+                logger.exception("Error computing lane leads / territory")
+                territory_metrics = {}
             
             last_match_stats = {}
             last_match_obj = None
@@ -471,15 +484,11 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
                 except Exception as e:
                      logger.exception("Error fetching last match obj")
 
-            yield await _progress("MOOD", "Analyzing player mood...", 80)
+            yield await _progress("MOOD", "Analyzing player mood...", 83)
 
             player_moods = model_instance.analyze_player_mood(df)
 
             win_rate = float(df['win'].mean() * 100) if not df.empty else 50.0
-            
-            yield await _progress("TERRITORIAL", "Analyzing territorial control...", 83)
-
-            territory_metrics = await analyze_territory_for_player(db, user.puuid, request.region)
 
             yield await _progress("WIN_PROB", "Calculating win probability...", 88)
 
@@ -573,7 +582,13 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
             if last_match_obj:
                  try:
                      regional_routing = REGION_TO_ROUTING.get(request.region.lower(), "europe")
-                     timeline = await riot_service.get_match_timeline(regional_routing, last_match_obj.match_id)
+
+                     # Reuse cached timeline if lane-leads or territory already fetched it
+                     if last_match_obj.match_id in _timeline_cache:
+                         timeline = _timeline_cache[last_match_obj.match_id]
+                     else:
+                         timeline = await riot_service.get_match_timeline(regional_routing, last_match_obj.match_id)
+                         _timeline_cache[last_match_obj.match_id] = timeline
 
                      # Find participant ID from match object
                      p_id = 0
@@ -695,8 +710,22 @@ async def analyze_player(request: AnalyzeRequest, background_tasks: BackgroundTa
     )
 
 
-async def analyze_territory_for_player(db: AsyncSession, puuid: str, region: str, limit: int = 5) -> dict:
-    """Analyze territorial control for a player's recent matches."""
+async def analyze_territory_for_player(
+    db: AsyncSession,
+    puuid: str,
+    region: str,
+    limit: int = 5,
+    timeline_cache: dict | None = None,
+) -> dict:
+    """Analyze territorial control for a player's recent matches.
+
+    Accepts an optional *timeline_cache* dict to avoid re-fetching timelines
+    already retrieved by other pipeline stages (e.g. lane-lead computation).
+    Fetches all required timelines concurrently instead of sequentially.
+    """
+    if timeline_cache is None:
+        timeline_cache = {}
+
     try:
         # Get recent match IDs with participant info
         result = await db.execute(
@@ -707,35 +736,44 @@ async def analyze_territory_for_player(db: AsyncSession, puuid: str, region: str
             .options(selectinload(Participant.match))
             .limit(limit)
         )
-        
+
         matches_data = result.all()
 
         if not matches_data:
             return {}
 
         regional_routing = REGION_TO_ROUTING.get(region.lower(), "europe")
+        _timeline_sem = asyncio.Semaphore(3)
 
-        territory_results = []
-        for row in matches_data:
-            participant = row[0]
-            match = row[1]
-
+        async def _analyze_one(participant, match):
             try:
                 stats = participant.stats_json or {}
                 participant_id = stats.get('participantId', 1)
 
-                metrics = await analyze_match_territory(
-                    riot_service,
-                    regional_routing,
-                    match.match_id,
-                    puuid,
-                    participant_id,
-                    participant.team_id
-                )
-                territory_results.append(metrics)
+                # Use cached timeline if available
+                if match.match_id in timeline_cache:
+                    timeline = timeline_cache[match.match_id]
+                else:
+                    async with _timeline_sem:
+                        timeline = await riot_service.get_match_timeline(regional_routing, match.match_id)
+                    timeline_cache[match.match_id] = timeline
+
+                if not timeline:
+                    return None
+
+                return calculate_territory_metrics(timeline, participant_id, participant.team_id)
             except Exception:
                 logger.exception("Error analyzing timeline for %s", match.match_id)
-                continue
+                return None
+
+        # Fetch & analyze all timelines concurrently
+        tasks = [_analyze_one(row[0], row[1]) for row in matches_data]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        territory_results: list[dict[str, float]] = [
+            r for r in results
+            if isinstance(r, dict)
+        ]
 
         if territory_results:
             return aggregate_territory_metrics(territory_results)
