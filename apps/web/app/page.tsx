@@ -219,15 +219,6 @@ export default function Home() {
               </h2>
             </div>
             <div className="hidden sm:flex items-center gap-4">
-              <button
-                onClick={() => router.push("/draft")}
-                className="group flex items-center gap-2 px-4 py-1.5 border border-[#C8A84B]/25 bg-[#C8A84B]/5
-                           hover:bg-[#C8A84B]/15 hover:border-[#C8A84B]/40 transition-all duration-300"
-                style={{ clipPath: "polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))" }}
-              >
-                <Swords className="w-3.5 h-3.5 text-[#C8A84B]/70 group-hover:text-[#C8A84B]" />
-                <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#C8A84B]/70 group-hover:text-[#C8A84B]">Draft Tool</span>
-              </button>
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#C8A84B]/20 bg-[#C8A84B]/5">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#C8A84B] animate-pulse" />
                 <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#C8A84B]/60">AI ONLINE</span>
@@ -295,6 +286,22 @@ export default function Home() {
                 {s.id}
               </button>
             ))}
+          </div>
+
+          {/* Draft Tool CTA */}
+          <div className="flex justify-center mt-5 animate-fade-in-up" style={{ animationDelay: "0.65s" }}>
+            <button
+              onClick={() => router.push("/draft")}
+              className="group relative flex items-center gap-2.5 px-6 py-2.5 rounded-sm border border-[#C8A84B]/50 bg-[#C8A84B]/5 hover:bg-[#C8A84B]/15 hover:border-[#C8A84B]/80 transition-all duration-300"
+              style={{ boxShadow: "0 0 20px rgba(200,168,75,0.1)" }}
+            >
+              <Swords className="w-4 h-4 text-[#C8A84B] group-hover:scale-110 transition-transform duration-200" />
+              <span className="text-[#C8A84B] font-mono text-sm uppercase tracking-[0.18em] font-medium">
+                Draft Tool
+              </span>
+              <div className="absolute inset-0 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                style={{ boxShadow: "0 0 24px rgba(200,168,75,0.25), inset 0 0 24px rgba(200,168,75,0.05)" }} />
+            </button>
           </div>
         </div>
 
