@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Zap, Trophy, Target, Eye, Activity, Github } from "lucide-react";
+import { Zap, Trophy, Target, Eye, Activity, Github, Swords } from "lucide-react";
 
 import { SearchBar } from "@/components/SearchBar";
 import { SplineHero } from "@/components/SplineHero";
@@ -218,9 +218,20 @@ export default function Home() {
                 <span className="text-[#C8A84B]">INSIGHT</span>
               </h2>
             </div>
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#C8A84B]/20 bg-[#C8A84B]/5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#C8A84B] animate-pulse" />
-              <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#C8A84B]/60">AI ONLINE</span>
+            <div className="hidden sm:flex items-center gap-4">
+              <button
+                onClick={() => router.push("/draft")}
+                className="group flex items-center gap-2 px-4 py-1.5 border border-[#C8A84B]/25 bg-[#C8A84B]/5
+                           hover:bg-[#C8A84B]/15 hover:border-[#C8A84B]/40 transition-all duration-300"
+                style={{ clipPath: "polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px))" }}
+              >
+                <Swords className="w-3.5 h-3.5 text-[#C8A84B]/70 group-hover:text-[#C8A84B]" />
+                <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#C8A84B]/70 group-hover:text-[#C8A84B]">Draft Tool</span>
+              </button>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#C8A84B]/20 bg-[#C8A84B]/5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C8A84B] animate-pulse" />
+                <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#C8A84B]/60">AI ONLINE</span>
+              </div>
             </div>
           </div>
         </header>
@@ -490,6 +501,65 @@ export default function Home() {
               Free · No Sign-up · Real-time Results
             </div>
           </div>
+
+      {/* ════════════════════════════════════════════════════════════
+          DRAFT ANALYSIS PROMO CARD
+      ════════════════════════════════════════════════════════════ */}
+      <div className="mt-20 max-w-3xl mx-auto">
+        <div
+          className="group relative cursor-pointer border border-[#C8A84B]/15 bg-[#0a0907] hover:border-[#C8A84B]/30
+                     transition-all duration-500 hover:-translate-y-1 overflow-hidden"
+          style={{ clipPath: "polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px))" }}
+          onClick={() => router.push("/draft")}
+        >
+          {/* Top accent bar */}
+          <div className="absolute top-0 left-0 right-[20px] h-[2px]"
+            style={{ background: "linear-gradient(90deg, #C8A84B90, #FFD87040, transparent)" }} />
+
+          {/* Background glow */}
+          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"
+            style={{ background: "radial-gradient(ellipse at 50% 0%, rgba(200,168,75,0.08) 0%, transparent 70%)" }} />
+
+          <div className="relative p-8 flex items-center gap-8">
+            {/* Icon */}
+            <div className="relative flex-shrink-0">
+              <div className="absolute inset-0 scale-150 blur-xl opacity-30 group-hover:opacity-60 transition-opacity duration-500"
+                style={{ background: "#C8A84B" }} />
+              <div className="relative w-16 h-16 flex items-center justify-center border transition-all duration-300 group-hover:scale-105"
+                style={{
+                  borderColor: "#C8A84B30",
+                  background: "linear-gradient(135deg, #C8A84B18, #C8A84B06)",
+                  clipPath: "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)",
+                }}>
+                <Swords className="w-7 h-7 text-[#C8A84B]" />
+              </div>
+            </div>
+
+            {/* Text */}
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-1">
+                <h3 className="text-xl font-black uppercase tracking-wider text-white/90">
+                  Draft Realtime Analysis
+                </h3>
+                <span className="text-[8px] font-mono uppercase tracking-[0.2em] px-2 py-0.5 border border-[#C8A84B]/25 text-[#C8A84B] bg-[#C8A84B]/8">
+                  NEW
+                </span>
+              </div>
+              <p className="text-sm text-white/35 leading-relaxed">
+                Simulate your live SoloQ draft in real time. Get AI-powered pick suggestions,
+                ban recommendations, synergy analysis, and win probability as you draft.
+              </p>
+            </div>
+
+            {/* Arrow */}
+            <div className="flex-shrink-0 text-[#C8A84B]/30 group-hover:text-[#C8A84B] group-hover:translate-x-1 transition-all duration-300">
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
 
         </div>
       </section>

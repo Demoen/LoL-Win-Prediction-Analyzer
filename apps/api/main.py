@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import analysis
+from routers import analysis, draft
 import os
 from contextlib import asynccontextmanager
 from init_db import init_models
@@ -31,6 +31,7 @@ app.add_middleware(
 )
 
 app.include_router(analysis.router)
+app.include_router(draft.router)
 
 @app.get("/api/health")
 async def health_check():
